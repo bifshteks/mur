@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,8 +13,11 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/bifshteks/mur/internal/repoid"
 	"github.com/bifshteks/mur/internal/reposync"
 	"github.com/bifshteks/mur/internal/scan"
+	"github.com/bifshteks/mur/internal/source"
+	"github.com/bifshteks/mur/internal/state"
 )
 
 const (
@@ -54,6 +59,50 @@ func (a *app) sync(ctx context.Context, f syncFlags) error {
 		return err
 	}
 
+	roots := a.scanRoots(st.ScanRoots)
+	for _, r := range roots {
+		if !isDir(r) {
+			_, _ = fmt.Fprintf(a.env.Stderr, "warning: scan root %s does not exist; mur config set scan_roots changes it\n", r)
+		}
+	}
+
+	var ask func(context.Context, reposync.Repo, []string) string
+	if a.env.IsTTY && !f.dryRun {
+		ask = a.askPath(newLineReader(a.env.Stdin))
+	}
+
+	report, placed := reposync.Run(ctx, a.git, syncRepos(w, st, f), &reposync.Options{
+		ScanRoots:   roots,
+		Concurrency: syncConcurrency,
+		Timeout:     syncTimeout,
+		Clones: func(ctx context.Context, roots []string) map[string][]string {
+			return scan.Clones(ctx, a.git, roots)
+		},
+		Ask:    ask,
+		Pull:   f.pull,
+		DryRun: f.dryRun,
+	})
+
+	if len(placed) > 0 && !f.dryRun {
+		if err := a.recordPaths(placed); err != nil {
+			return err
+		}
+	}
+
+	if len(report.NeedsPath) > 0 {
+		report.Hint = locateHint(w)
+	}
+
+	if err := a.print(report); err != nil {
+		return err
+	}
+
+	return syncExit(&report)
+}
+
+// syncRepos picks the repos this run covers: --status narrows, and statuses
+// declared with sync: false are skipped with a reason unless --all.
+func syncRepos(w *source.Workspace, st *state.State, f syncFlags) []reposync.Repo {
 	repos := make([]reposync.Repo, 0, len(w.Repos))
 
 	for i := range w.Repos {
@@ -70,48 +119,26 @@ func (a *app) sync(ctx context.Context, f syncFlags) error {
 		repos = append(repos, sr)
 	}
 
-	roots := a.scanRoots(st.ScanRoots)
-	for _, r := range roots {
-		if !isDir(r) {
-			_, _ = fmt.Fprintf(a.env.Stderr, "warning: scan root %s does not exist; mur config set scan_roots changes it\n", r)
-		}
-	}
+	return repos
+}
 
-	var ask func(reposync.Repo, []string) string
-	if a.env.IsTTY && !f.dryRun {
-		ask = a.askPath(bufio.NewReader(a.env.Stdin))
-	}
-
-	report, placed := reposync.Run(ctx, a.git, repos, &reposync.Options{
-		ScanRoots:   roots,
-		Concurrency: syncConcurrency,
-		Timeout:     syncTimeout,
-		Clones: func(ctx context.Context, roots []string) map[string][]string {
-			return scan.Clones(ctx, a.git, roots)
-		},
-		Ask:    ask,
-		Pull:   f.pull,
-		DryRun: f.dryRun,
-	})
-
-	for id, p := range placed {
-		st.SetPath(id, p)
-	}
-
-	if len(placed) > 0 && !f.dryRun {
-		if err := a.saveState(st); err != nil {
-			return err
-		}
-	}
-
-	if len(report.NeedsPath) > 0 {
-		report.Hint = locateHint(w)
-	}
-
-	if err := a.print(report); err != nil {
+// recordPaths saves what sync decided. Sync can run for minutes and another
+// mur may have changed the state meanwhile, so it applies only its own
+// decisions to a fresh read.
+func (a *app) recordPaths(placed map[string]string) error {
+	fresh, err := a.loadState()
+	if err != nil {
 		return err
 	}
 
+	for id, p := range placed {
+		fresh.SetPath(id, p)
+	}
+
+	return a.saveState(fresh)
+}
+
+func syncExit(report *reposync.Report) error {
 	switch {
 	case len(report.NeedsPath) > 0:
 		return &exitError{code: ExitNeedsPath, err: fmt.Errorf("%d repo(s) need a path", len(report.NeedsPath)), printed: true}
@@ -136,10 +163,49 @@ func (a *app) scanRoots(configured []string) []string {
 	return roots
 }
 
+// lineReader hands out stdin lines without blocking an interrupt: reading
+// happens in its own goroutine, which ends at EOF or with the process.
+type lineReader struct {
+	lines chan string
+}
+
+func newLineReader(in io.Reader) *lineReader {
+	lr := &lineReader{lines: make(chan string)}
+	br := bufio.NewReader(in)
+
+	go func() {
+		defer close(lr.lines)
+
+		for {
+			line, err := br.ReadString('\n')
+			if line != "" || err == nil {
+				lr.lines <- strings.TrimSpace(line)
+			}
+
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	return lr
+}
+
+// next is the next line; ok is false at EOF or on interrupt.
+func (lr *lineReader) next(ctx context.Context) (line string, ok bool) {
+	select {
+	case <-ctx.Done():
+		return "", false
+	case l, open := <-lr.lines:
+		return l, open
+	}
+}
+
 // askPath prompts on stderr for where a repo goes: a candidate's number, a
-// path (cloned there if it does not exist), or nothing to leave it unplaced.
-func (a *app) askPath(in *bufio.Reader) func(reposync.Repo, []string) string {
-	return func(r reposync.Repo, candidates []string) string {
+// path that is that repo's clone, a missing or empty directory to clone into,
+// or nothing to leave it unplaced. An interrupt or EOF counts as nothing.
+func (a *app) askPath(in *lineReader) func(context.Context, reposync.Repo, []string) string {
+	return func(ctx context.Context, r reposync.Repo, candidates []string) string {
 		name := r.Alias
 		if name == "" {
 			name = r.ID
@@ -150,19 +216,41 @@ func (a *app) askPath(in *bufio.Reader) func(reposync.Repo, []string) string {
 			_, _ = fmt.Fprintf(a.env.Stderr, "  %d) %s\n", i+1, c)
 		}
 
-		_, _ = fmt.Fprint(a.env.Stderr, "Number, path to clone into, or empty to skip: ")
+		for {
+			_, _ = fmt.Fprint(a.env.Stderr, "Number, path to clone into, or empty to skip: ")
 
-		line, _ := in.ReadString('\n')
-		line = strings.TrimSpace(line)
+			line, ok := in.next(ctx)
+			if !ok || line == "" {
+				return ""
+			}
 
-		if n, err := strconv.Atoi(line); err == nil && n >= 1 && n <= len(candidates) {
-			return candidates[n-1]
+			if n, err := strconv.Atoi(line); err == nil && n >= 1 && n <= len(candidates) {
+				return candidates[n-1]
+			}
+
+			p := a.abs(line)
+			if reason := a.unusable(ctx, p, r.ID); reason != "" {
+				_, _ = fmt.Fprintln(a.env.Stderr, reason)
+
+				continue
+			}
+
+			return p
 		}
-
-		if line == "" {
-			return ""
-		}
-
-		return a.abs(line)
 	}
+}
+
+// unusable says why a typed path cannot hold the repo, or "" when it can: it
+// does not exist yet, is empty, or is a clone of exactly this repo.
+func (a *app) unusable(ctx context.Context, p, id string) string {
+	entries, err := os.ReadDir(p)
+	if os.IsNotExist(err) || (err == nil && len(entries) == 0) {
+		return ""
+	}
+
+	if a.git.IsRepo(ctx, p) && repoid.Normalize(a.git.Origin(ctx, p)) == id {
+		return ""
+	}
+
+	return p + " is not a clone of " + id + " and is not empty"
 }

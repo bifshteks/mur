@@ -2,6 +2,7 @@ package fixtures
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -82,10 +83,28 @@ func (h *Home) MurTTY(input string, args ...string) Result {
 	return h.run(true, input, args)
 }
 
+// MurCtx runs mur non-interactively under ctx, so a test can interrupt it.
+func (h *Home) MurCtx(ctx context.Context, args ...string) Result {
+	h.t.Helper()
+
+	return h.runCtx(ctx, false, "", args)
+}
+
+// MurTTYCtx runs mur at a terminal under ctx.
+func (h *Home) MurTTYCtx(ctx context.Context, input string, args ...string) Result {
+	h.t.Helper()
+
+	return h.runCtx(ctx, true, input, args)
+}
+
 func (h *Home) run(tty bool, input string, args []string) Result {
+	return h.runCtx(h.t.Context(), tty, input, args)
+}
+
+func (h *Home) runCtx(ctx context.Context, tty bool, input string, args []string) Result {
 	var stdout, stderr bytes.Buffer
 
-	code := cli.Run(h.t.Context(), cli.Env{
+	code := cli.Run(ctx, cli.Env{
 		Args:    args,
 		Stdin:   strings.NewReader(input),
 		Stdout:  &stdout,
@@ -152,4 +171,14 @@ func (h *Home) Source(name string) string {
 	h.Mur("source", "init", name, "--path", dir).OK(h.t)
 
 	return dir
+}
+
+// Mkdir creates an empty directory under this home.
+func (h *Home) Mkdir(rel string) string {
+	h.t.Helper()
+
+	p := h.Path(rel)
+	require.NoError(h.t, os.MkdirAll(p, 0o750))
+
+	return p
 }

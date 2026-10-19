@@ -2,7 +2,10 @@ package reposync
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,7 +32,7 @@ type Options struct {
 	// Clones finds existing clones under the scan roots, by repo id.
 	Clones func(ctx context.Context, roots []string) map[string][]string
 	// Ask, when set, asks a person where a repo goes: a path, or "" to skip.
-	Ask    func(r Repo, candidates []string) string
+	Ask    func(ctx context.Context, r Repo, candidates []string) string
 	Pull   bool
 	DryRun bool
 }
@@ -152,8 +155,8 @@ func place(ctx context.Context, unplaced []Repo, opt *Options, report *Report, p
 		p := ""
 		if len(candidates) == 1 {
 			p = candidates[0]
-		} else if opt.Ask != nil {
-			p = opt.Ask(r, candidates)
+		} else if opt.Ask != nil && ctx.Err() == nil {
+			p = opt.Ask(ctx, r, candidates)
 		}
 
 		switch {
@@ -161,7 +164,7 @@ func place(ctx context.Context, unplaced []Repo, opt *Options, report *Report, p
 			report.NeedsPath = append(report.NeedsPath, NeedsPath{
 				ID: r.ID, Alias: r.Alias, Candidates: append([]string{}, candidates...),
 			})
-		case isDir(p):
+		case isDir(p) && !isEmptyDir(p):
 			placed[r.ID] = p
 			report.Adopted = append(report.Adopted, Placed{ID: r.ID, Path: p})
 		default:
@@ -198,9 +201,9 @@ func (o outcome) addTo(r *Report) {
 func syncOne(ctx context.Context, g git.Git, r *Repo, opt *Options) outcome {
 	failed := func(err error) outcome { return outcome{failed: &Failed{ID: r.ID, Error: err.Error()}} }
 
-	if _, err := os.Stat(r.Path); os.IsNotExist(err) {
+	if _, err := os.Stat(r.Path); os.IsNotExist(err) || isEmptyDir(r.Path) {
 		if !opt.DryRun {
-			if _, err := g.Run(ctx, "", "clone", "-q", "--", r.URL, r.Path); err != nil {
+			if err := clone(ctx, g, r, opt); err != nil {
 				return failed(err)
 			}
 		}
@@ -210,6 +213,10 @@ func syncOne(ctx context.Context, g git.Git, r *Repo, opt *Options) outcome {
 
 	if !opt.DryRun {
 		if _, err := g.Run(ctx, r.Path, "fetch", "-q", "--prune"); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				err = fmt.Errorf("fetch timed out after %s", opt.Timeout)
+			}
+
 			return failed(err)
 		}
 	}
@@ -238,6 +245,32 @@ func syncOne(ctx context.Context, g git.Git, r *Repo, opt *Options) outcome {
 	return outcome{synced: &s}
 }
 
+// clone leaves nothing behind when it fails, so the next sync clones again
+// instead of tripping over a directory with a broken .git in it.
+func clone(ctx context.Context, g git.Git, r *Repo, opt *Options) error {
+	existed := isDir(r.Path)
+
+	_, err := g.Run(ctx, "", "clone", "-q", "--", r.URL, r.Path)
+	if err == nil {
+		return nil
+	}
+
+	if existed {
+		entries, _ := os.ReadDir(r.Path)
+		for _, e := range entries {
+			_ = os.RemoveAll(filepath.Join(r.Path, e.Name()))
+		}
+	} else {
+		_ = os.RemoveAll(r.Path)
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf("clone timed out after %s", opt.Timeout)
+	}
+
+	return err
+}
+
 // pullBlocker says why a fast-forward would be unsafe: only a clean tree on
 // the remote's default branch is touched, so in-progress work never moves.
 func pullBlocker(ctx context.Context, g git.Git, r *Repo, s *Synced) string {
@@ -255,6 +288,12 @@ func pullBlocker(ctx context.Context, g git.Git, r *Repo, s *Synced) string {
 	}
 
 	return ""
+}
+
+func isEmptyDir(p string) bool {
+	entries, err := os.ReadDir(p)
+
+	return err == nil && len(entries) == 0
 }
 
 func isDir(p string) bool {
