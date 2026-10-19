@@ -346,3 +346,47 @@ func TestSync_AnInterruptAtThePromptStopsTheQuestions(t *testing.T) {
 	require.Contains(t, res.Stdout, "alias: collector")
 	require.Contains(t, res.Stdout, "alias: gateway")
 }
+
+func TestSync_APathHoldingADifferentRepoFailsInsteadOfPassingForIt(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	remotes := home.Team(fixtures.TeamRepo{Name: "collector"}, fixtures.TeamRepo{Name: "gateway"})
+	clone := home.Clone(remotes["collector"], "projects/collector")
+	home.Mur("repo", "locate", "collector", clone, "--workspace", "team").OK(t)
+	home.Mur("repo", "locate", "gateway", clone, "--workspace", "team").OK(t)
+
+	res := home.Mur("sync", "--workspace", "team")
+
+	require.Equal(t, cli.ExitError, res.Code)
+	require.Contains(t, res.Stdout, "synced:\n  - id: "+fixtures.RepoID(remotes["collector"])+"\n")
+	require.Contains(t, res.Stdout, "failed:\n  - id: "+fixtures.RepoID(remotes["gateway"])+"\n    error: "+
+		clone+" holds "+fixtures.RepoID(remotes["collector"]))
+}
+
+func TestSync_AtATerminalOnePathCannotBeGivenToTwoRepos(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	remotes := home.Team(fixtures.TeamRepo{Name: "collector"}, fixtures.TeamRepo{Name: "gateway"})
+
+	res := home.MurTTY("~/code/svc\n~/code/svc\n\n", "sync", "--workspace", "team")
+
+	require.Equal(t, cli.ExitNeedsPath, res.Code)
+	require.Contains(t, res.Stderr, home.Path("code/svc")+" is already the path of "+fixtures.RepoID(remotes["collector"]))
+	require.Contains(t, res.Stdout, "cloned:\n  - id: "+fixtures.RepoID(remotes["collector"])+"\n")
+	require.Contains(t, res.Stdout, "needs_path:\n  - id: "+fixtures.RepoID(remotes["gateway"])+"\n")
+}
+
+func TestSync_AtATerminalANumberMustBeOneOfTheCandidates(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Team(fixtures.TeamRepo{Name: "collector"})
+
+	res := home.MurTTY("3\n\n", "sync", "--workspace", "team")
+
+	require.Equal(t, cli.ExitNeedsPath, res.Code)
+	require.Contains(t, res.Stderr, "3 is not one of the 0 candidates")
+	require.Equal(t, cli.ExitNeedsPath, home.Mur("resolve", "collector", "--workspace", "team", "--path").Code)
+}

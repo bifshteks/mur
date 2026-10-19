@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/bifshteks/mur/internal/git"
+	"github.com/bifshteks/mur/internal/repoid"
 )
 
 // Repo is one repo to sync: its definition and where this laptop keeps it.
@@ -209,6 +210,16 @@ func syncOne(ctx context.Context, g git.Git, r *Repo, opt *Options) outcome {
 		}
 
 		return outcome{cloned: &Placed{ID: r.ID, Path: r.Path}}
+	}
+
+	// A recorded path is trusted only while it holds this repo: a mistyped
+	// locate or a stale pulled path must not pass another clone off as it.
+	if origin := repoid.Normalize(g.Origin(ctx, r.Path)); origin != r.ID {
+		if origin == "" {
+			origin = "no repo with an origin"
+		}
+
+		return failed(fmt.Errorf("%s holds %s", r.Path, origin))
 	}
 
 	if !opt.DryRun {
