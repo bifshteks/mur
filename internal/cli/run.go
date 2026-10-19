@@ -113,7 +113,7 @@ func (a *app) rootCommand() *cobra.Command {
 		SilenceUsage:  true,
 	}
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "print JSON instead of YAML")
-	root.AddCommand(a.sourceCommand(), a.workspaceCommand(), a.repoCommand(), a.resolveCommand())
+	root.AddCommand(a.sourceCommand(), a.workspaceCommand(), a.repoCommand(), a.resolveCommand(), a.syncCommand())
 
 	return root
 }

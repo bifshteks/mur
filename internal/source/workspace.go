@@ -153,3 +153,14 @@ func (w *Workspace) ExtraFiles() ([]string, error) {
 
 	return files, nil
 }
+
+// Syncs reports whether sync touches repos with this status by default.
+func (w *Workspace) Syncs(status string) bool {
+	for _, s := range w.Statuses {
+		if s.Name == status {
+			return s.Sync == nil || *s.Sync
+		}
+	}
+
+	return true
+}
