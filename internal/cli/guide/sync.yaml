@@ -1,0 +1,11 @@
+synced: []
+cloned: []
+adopted:
+  - id: git.nimbus.example/nimbus/services-team/svc-analytics-collector
+    path: /home/me/projects/services-team/svc-analytics-collector
+skipped: []
+failed: []
+needs_path:
+  - id: git.nimbus.example/nimbus/services-team/svc-analytics-logrotate
+    candidates: []
+hint: mur repo locate <alias|url> <dir> --workspace analytics
