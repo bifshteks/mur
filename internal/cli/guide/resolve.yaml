@@ -1,0 +1,12 @@
+- query: collector
+  workspace: nimbus/analytics
+  id: git.nimbus.example/nimbus/services-team/svc-analytics-collector
+  url: git@git.nimbus.example:nimbus/services-team/svc-analytics-collector.git
+  path: /home/me/projects/services-team/svc-analytics-collector
+  cloned: true
+  description: Reads k8s node files and exports them.
+  aliases:
+    - collector
+  langs:
+    - go
+  status: live

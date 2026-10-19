@@ -115,6 +115,8 @@ func (a *app) rootCommand() *cobra.Command {
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "print JSON instead of YAML")
 	root.AddCommand(a.sourceCommand(), a.workspaceCommand(), a.repoCommand(), a.resolveCommand(), a.syncCommand(),
 		a.stateCommand(), a.configCommand())
+	root.AddCommand(a.agentGuideCommand(root))
+	root.CompletionOptions.DisableDefaultCmd = true
 
 	return root
 }
