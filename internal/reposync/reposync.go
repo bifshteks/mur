@@ -200,7 +200,7 @@ func syncOne(ctx context.Context, g git.Git, r *Repo, opt *Options) outcome {
 
 	if _, err := os.Stat(r.Path); os.IsNotExist(err) {
 		if !opt.DryRun {
-			if _, err := g.Run(ctx, "", "clone", "-q", r.URL, r.Path); err != nil {
+			if _, err := g.Run(ctx, "", "clone", "-q", "--", r.URL, r.Path); err != nil {
 				return failed(err)
 			}
 		}
@@ -267,12 +267,12 @@ func isDir(p string) bool {
 func where(ctx context.Context, g git.Git, r *Repo) (Synced, error) {
 	s := Synced{ID: r.ID}
 
-	branch, err := g.Run(ctx, r.Path, "rev-parse", "--abbrev-ref", "HEAD")
-	if err != nil {
-		return s, err
+	// symbolic-ref also names an unborn branch (a remote with no commits yet);
+	// it fails only on a detached HEAD.
+	s.Branch = "HEAD"
+	if branch, err := g.Run(ctx, r.Path, "symbolic-ref", "--short", "-q", "HEAD"); err == nil {
+		s.Branch = branch
 	}
-
-	s.Branch = branch
 
 	status, err := g.Run(ctx, r.Path, "status", "--porcelain")
 	if err != nil {

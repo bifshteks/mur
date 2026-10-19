@@ -19,26 +19,29 @@ func (a *app) workspaceCommand() *cobra.Command {
 }
 
 type workspaceEntry struct {
-	Name    string `json:"name"             yaml:"name"`
-	Source  string `json:"source"           yaml:"source"`
-	Summary string `json:"summary"          yaml:"summary"`
-	Active  bool   `json:"active,omitempty" yaml:"active,omitempty"`
+	Name    string     `json:"name"             yaml:"name"`
+	Source  string     `json:"source"           yaml:"source"`
+	Summary string     `json:"summary"          yaml:"summary"`
+	Active  bool       `json:"active,omitempty" yaml:"active,omitempty"`
+	Repos   []repoView `json:"repos,omitempty"  yaml:"repos,omitempty"`
 }
 
 func (a *app) workspaceListCommand() *cobra.Command {
-	return &cobra.Command{
+	var withRepos bool
+
+	cmd := &cobra.Command{
 		Use:   cmdList,
 		Short: "List workspaces across all sources",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			cat, st, err := a.catalog()
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			all, err := cat.Workspaces()
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			active := ""
@@ -47,15 +50,22 @@ func (a *app) workspaceListCommand() *cobra.Command {
 			}
 
 			out := []workspaceEntry{}
+
 			for _, w := range all {
-				out = append(out, workspaceEntry{
-					Name: w.Name, Source: w.Source, Summary: w.Summary, Active: w.Qualified() == active,
-				})
+				e := workspaceEntry{Name: w.Name, Source: w.Source, Summary: w.Summary, Active: w.Qualified() == active}
+				if withRepos {
+					e.Repos = a.repoViews(w, st)
+				}
+
+				out = append(out, e)
 			}
 
-			return fail(a.print(out))
+			return a.print(out)
 		},
 	}
+	cmd.Flags().BoolVar(&withRepos, "repos", false, "include each workspace's repos")
+
+	return cmd
 }
 
 func (a *app) workspaceCreateCommand() *cobra.Command {
@@ -66,7 +76,7 @@ func (a *app) workspaceCreateCommand() *cobra.Command {
 		Short: "Create a workspace in a source (--source required when several are attached)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return fail(a.workspaceCreate(args[0], srcName, summary))
+			return a.workspaceCreate(args[0], srcName, summary)
 		},
 	}
 	cmd.Flags().StringVar(&srcName, "source", "", "source to create the workspace in")
@@ -123,15 +133,15 @@ func (a *app) workspaceActivateCommand() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			w, st, err := a.findWorkspace(args[0])
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			st.Active = args[0]
 			if err := a.saveState(st); err != nil {
-				return fail(err)
+				return err
 			}
 
-			return fail(a.print(activeOutput{Active: w.Qualified()}))
+			return a.print(activeOutput{Active: w.Qualified()})
 		},
 	}
 }
@@ -153,7 +163,7 @@ func (a *app) workspaceShowCommand() *cobra.Command {
 		Short: "Everything to read before working across a workspace: summary, README, repos with paths, extra files",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return fail(a.workspaceShow(firstOf(args)))
+			return a.workspaceShow(firstOf(args))
 		},
 	}
 }

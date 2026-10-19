@@ -13,6 +13,15 @@ import (
 
 const seqTag = "!!seq"
 
+// blockStyle turns a hand-written flow collection, and everything inside it,
+// into block style before mur rewrites it.
+func blockStyle(n *yaml.Node) {
+	n.Style &^= yaml.FlowStyle
+	for _, c := range n.Content {
+		blockStyle(c)
+	}
+}
+
 func scalar(v string) *yaml.Node {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v}
 }

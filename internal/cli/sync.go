@@ -36,7 +36,7 @@ func (a *app) syncCommand() *cobra.Command {
 		Short: "Adopt existing clones, clone missing repos, fetch the rest; never changes a working tree",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return fail(a.sync(cmd.Context(), f))
+			return a.sync(cmd.Context(), f)
 		},
 	}
 	cmd.Flags().StringVar(&f.workspace, "workspace", "", "workspace to sync (default $MUR_WORKSPACE, then the active one)")
@@ -70,13 +70,20 @@ func (a *app) sync(ctx context.Context, f syncFlags) error {
 		repos = append(repos, sr)
 	}
 
+	roots := a.scanRoots(st.ScanRoots)
+	for _, r := range roots {
+		if !isDir(r) {
+			_, _ = fmt.Fprintf(a.env.Stderr, "warning: scan root %s does not exist; mur config set scan_roots changes it\n", r)
+		}
+	}
+
 	var ask func(reposync.Repo, []string) string
 	if a.env.IsTTY && !f.dryRun {
 		ask = a.askPath(bufio.NewReader(a.env.Stdin))
 	}
 
 	report, placed := reposync.Run(ctx, a.git, repos, &reposync.Options{
-		ScanRoots:   a.scanRoots(st.ScanRoots),
+		ScanRoots:   roots,
 		Concurrency: syncConcurrency,
 		Timeout:     syncTimeout,
 		Clones: func(ctx context.Context, roots []string) map[string][]string {

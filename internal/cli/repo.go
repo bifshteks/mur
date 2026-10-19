@@ -33,7 +33,7 @@ func (a *app) repoAddCommand() *cobra.Command {
 
 			r.URL = args[0]
 
-			return fail(a.repoAdd(ws, &r))
+			return a.repoAdd(ws, &r)
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to add the repo to")
@@ -76,7 +76,7 @@ func (a *app) repoLocateCommand() *cobra.Command {
 		Short: "Record where a repo is (or should be) cloned on this laptop; dir may not exist yet",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return fail(a.repoLocate(ws, args[0], args[1]))
+			return a.repoLocate(ws, args[0], args[1])
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace the repo is in (default $MUR_WORKSPACE, then the active one)")
@@ -115,7 +115,7 @@ func (a *app) repoListCommand() *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			w, st, err := a.readWorkspace(ws)
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			views := []repoView{}
@@ -126,7 +126,7 @@ func (a *app) repoListCommand() *cobra.Command {
 				views = append(views, v)
 			}
 
-			return fail(a.print(views))
+			return a.print(views)
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to list (default $MUR_WORKSPACE, then the active one)")
@@ -146,7 +146,7 @@ func (a *app) repoRemoveCommand() *cobra.Command {
 				return usagef("repo remove writes a source; pass --workspace")
 			}
 
-			return fail(a.repoRemove(ws, args[0]))
+			return a.repoRemove(ws, args[0])
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to remove the repo from")

@@ -2,15 +2,17 @@ package state
 
 import (
 	"maps"
+	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
 )
 
 // WithTilde is a copy for sharing: every path under home is spelled with ~, so
-// it lands correctly for a different username on another laptop.
+// it lands correctly for a different username on another laptop, and no remote
+// carries a password or token into the shared source.
 func (s *State) WithTilde(home string) *State {
-	return s.mapPaths(func(p string) string {
+	shared := s.mapPaths(func(p string) string {
 		if p == home {
 			return "~"
 		}
@@ -21,6 +23,28 @@ func (s *State) WithTilde(home string) *State {
 
 		return p
 	})
+
+	for i := range shared.Sources {
+		shared.Sources[i].Remote = withoutSecret(shared.Sources[i].Remote)
+	}
+
+	return shared
+}
+
+// withoutSecret drops the password from a url's userinfo, keeping the user.
+func withoutSecret(remote string) string {
+	u, err := url.Parse(remote)
+	if err != nil || u.User == nil {
+		return remote
+	}
+
+	if _, hasPassword := u.User.Password(); !hasPassword {
+		return remote
+	}
+
+	u.User = url.User(u.User.Username())
+
+	return u.String()
 }
 
 // Expanded is the inverse of WithTilde, against this laptop's home.
@@ -39,7 +63,11 @@ func (s *State) Expanded(home string) *State {
 }
 
 func (s *State) mapPaths(f func(string) string) *State {
-	out := &State{Active: s.Active, ScanRoots: s.ScanRoots}
+	out := &State{Active: s.Active}
+
+	for _, r := range s.ScanRoots {
+		out.ScanRoots = append(out.ScanRoots, f(r))
+	}
 
 	for _, src := range s.Sources {
 		src.Path = f(src.Path)

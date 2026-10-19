@@ -125,6 +125,27 @@ func (a *app) rootCommand() *cobra.Command {
 		a.stateCommand(), a.configCommand())
 	root.AddCommand(a.agentGuideCommand(root))
 	root.CompletionOptions.DisableDefaultCmd = true
+	finish(root)
 
 	return root
+}
+
+// finish makes two rules hold for every command, so no command can forget them:
+// a group given an unknown subcommand is a usage error (cobra would print help
+// and exit 0), and any error from a command body exits 1 unless it carries its
+// own code. Errors that never reach a body are cobra rejecting the command
+// line, which Run maps to exit 2.
+func finish(cmd *cobra.Command) {
+	switch {
+	case cmd.HasSubCommands() && cmd.RunE == nil:
+		cmd.Args = cobra.NoArgs
+		cmd.RunE = func(c *cobra.Command, _ []string) error { return c.Help() }
+	case cmd.RunE != nil:
+		run := cmd.RunE
+		cmd.RunE = func(c *cobra.Command, args []string) error { return fail(run(c, args)) }
+	}
+
+	for _, c := range cmd.Commands() {
+		finish(c)
+	}
 }

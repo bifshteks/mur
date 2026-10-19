@@ -45,3 +45,16 @@ func isDir(p string) bool {
 
 	return err == nil && fi.IsDir()
 }
+
+// repoViews shows every repo of a workspace, without repeating the workspace.
+func (a *app) repoViews(w *source.Workspace, st *state.State) []repoView {
+	views := make([]repoView, 0, len(w.Repos))
+
+	for i := range w.Repos {
+		v := a.repoView(w, st, &w.Repos[i])
+		v.Workspace = ""
+		views = append(views, v)
+	}
+
+	return views
+}
