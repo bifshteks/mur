@@ -1,0 +1,12 @@
+- query: collector
+  workspace: mws/auditlogs
+  id: git.mws-team.ru/mws/security-services/sec-audit-collector
+  url: git@git.mws-team.ru:mws/security-services/sec-audit-collector.git
+  path: /home/me/projects/security-services/sec-audit-collector
+  cloned: true
+  description: Reads k8s node files and exports them.
+  aliases:
+    - collector
+  langs:
+    - go
+  status: live

@@ -1,0 +1,11 @@
+synced: []
+cloned: []
+adopted:
+  - id: git.mws-team.ru/mws/security-services/sec-audit-collector
+    path: /home/me/projects/security-services/sec-audit-collector
+skipped: []
+failed: []
+needs_path:
+  - id: git.mws-team.ru/mws/security-services/sec-audit-logrotate
+    candidates: []
+hint: mur repo locate <alias|url> <dir> --workspace auditlogs
