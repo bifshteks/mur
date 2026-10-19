@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+const waitDelay = 5 * time.Second
 
 // Git runs the git binary, so SSH config, credentials and worktrees behave
 // exactly as in the user's terminal.
@@ -18,6 +22,10 @@ func (g Git) Run(ctx context.Context, dir string, args ...string) (string, error
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
 	cmd.Env = g.Environ
+	// On cancel git gets SIGINT, not SIGKILL, so it removes a half-done clone
+	// itself. WaitDelay bounds how long an ssh child may hold the pipes after.
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = waitDelay
 
 	var stdout, stderr bytes.Buffer
 
@@ -25,6 +33,10 @@ func (g Git) Run(ctx context.Context, dir string, args ...string) (string, error
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("git %s: %w", args[0], ctx.Err())
+		}
+
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = err.Error()

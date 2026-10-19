@@ -62,7 +62,25 @@ func (s *State) Save(path string) error {
 		return fmt.Errorf("create state dir: %w", err)
 	}
 
-	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
+	// Write then rename, so a reader never sees a half-written file.
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".state-*.yaml")
+	if err != nil {
+		return fmt.Errorf("write state: %w", err)
+	}
+
+	defer os.Remove(tmp.Name())
+
+	if _, err := tmp.Write(buf.Bytes()); err != nil {
+		_ = tmp.Close()
+
+		return fmt.Errorf("write state: %w", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("write state: %w", err)
+	}
+
+	if err := os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
 

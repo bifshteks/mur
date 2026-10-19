@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -120,4 +121,31 @@ func (h *Home) EmptyRemote(name string) string {
 	h.Git(bare, "init", "-q", "--bare")
 
 	return bare
+}
+
+// HangingRemote makes every ssh remote hang forever, like a dead VPN. It
+// returns a url to use and a channel that closes once git is stuck on it.
+func (h *Home) HangingRemote() (url string, stuck <-chan struct{}) {
+	h.t.Helper()
+
+	marker := h.Path("ssh-started")
+	script := h.WriteFile("bin/hanging-ssh", "#!/bin/sh\ntouch '"+marker+"'\nexec sleep 60\n")
+	require.NoError(h.t, os.Chmod(script, 0o700)) //nolint:gosec // test helper script
+	h.Setenv("GIT_SSH_COMMAND", script)
+
+	started := make(chan struct{})
+
+	go func() {
+		defer close(started)
+
+		for range 200 {
+			if _, err := os.Stat(marker); err == nil {
+				return
+			}
+
+			time.Sleep(50 * time.Millisecond)
+		}
+	}()
+
+	return "ssh://git@example.invalid/team/slow.git", started
 }

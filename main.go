@@ -38,9 +38,3 @@ func main() {
 	stop()
 	os.Exit(code)
 }
-
-func isTerminal(f *os.File) bool {
-	fi, err := f.Stat()
-
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
-}
