@@ -38,7 +38,6 @@ brews:
     directory: Formula
     homepage: https://github.com/bifshteks/mur
     description: Which repos a workspace has, what each is for, and where each is cloned
-    license: MIT
     dependencies:
       - name: git
     install: |
