@@ -32,7 +32,7 @@ func (a *app) sourceInitCommand() *cobra.Command {
 		Short: "Write a source skeleton into DIR (git init only if DIR is not a repo) and attach it",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fail(a.sourceInit(cmd.Context(), args[0], dir))
+			return a.sourceInit(cmd.Context(), args[0], dir)
 		},
 	}
 	cmd.Flags().StringVar(&dir, "path", "", "directory for the source (default $MUR_HOME/sources/<name>)")
@@ -91,10 +91,10 @@ func (a *app) sourceListCommand() *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			st, err := a.loadState()
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
-			return fail(a.print(nonNil(st.Sources)))
+			return a.print(nonNil(st.Sources))
 		},
 	}
 }
@@ -116,7 +116,7 @@ func (a *app) sourceAddCommand() *cobra.Command {
 		Short: "Attach a source: an existing checkout where it is, or a url cloned into DIR",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fail(a.sourceAdd(cmd.Context(), args[0], args[1], dir))
+			return a.sourceAdd(cmd.Context(), args[0], args[1], dir)
 		},
 	}
 	cmd.Flags().StringVar(&dir, "path", "", "where to clone a url (default $MUR_HOME/sources/<name>)")
@@ -145,7 +145,7 @@ func (a *app) sourceAdd(ctx context.Context, name, from, dir string) error {
 		src.Path = a.sourceDir(name, dir)
 		src.Remote = from
 
-		if _, err := a.git.Run(ctx, "", "clone", "-q", from, src.Path); err != nil {
+		if _, err := a.git.Run(ctx, "", "clone", "-q", "--", from, src.Path); err != nil {
 			return err
 		}
 	}
@@ -180,7 +180,7 @@ func (a *app) sourcePullCommand() *cobra.Command {
 		Short: "Fast-forward sources from their remotes (git pull --ff-only)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fail(a.sourcePull(cmd.Context(), firstOf(args)))
+			return a.sourcePull(cmd.Context(), firstOf(args))
 		},
 	}
 }
@@ -237,7 +237,7 @@ func (a *app) sourceRemoveCommand() *cobra.Command {
 		RunE: func(_ *cobra.Command, args []string) error {
 			st, err := a.loadState()
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			i := slices.IndexFunc(st.Sources, func(s state.Source) bool { return s.Name == args[0] })
@@ -249,10 +249,10 @@ func (a *app) sourceRemoveCommand() *cobra.Command {
 			st.Sources = slices.Delete(st.Sources, i, i+1)
 
 			if err := a.saveState(st); err != nil {
-				return fail(err)
+				return err
 			}
 
-			return fail(a.print(removed))
+			return a.print(removed)
 		},
 	}
 }

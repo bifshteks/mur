@@ -26,7 +26,7 @@ func (a *app) configCommand() *cobra.Command {
 
 			st, err := a.loadState()
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			roots := st.ScanRoots
@@ -34,7 +34,7 @@ func (a *app) configCommand() *cobra.Command {
 				roots = defaultScanRoots
 			}
 
-			return fail(a.print(roots))
+			return a.print(roots)
 		},
 	}, &cobra.Command{
 		Use:   "set scan_roots <dir>[,<dir>...]",
@@ -47,7 +47,7 @@ func (a *app) configCommand() *cobra.Command {
 
 			st, err := a.loadState()
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			st.ScanRoots = nil
@@ -59,10 +59,10 @@ func (a *app) configCommand() *cobra.Command {
 			}
 
 			if err := a.saveState(st); err != nil {
-				return fail(err)
+				return err
 			}
 
-			return fail(a.print(st.ScanRoots))
+			return a.print(st.ScanRoots)
 		},
 	})
 

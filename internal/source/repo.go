@@ -90,7 +90,7 @@ func (w *Workspace) reposNode() *yaml.Node {
 				*seq = yaml.Node{Kind: yaml.SequenceNode, Tag: seqTag}
 			}
 
-			seq.Style &^= yaml.FlowStyle
+			blockStyle(seq)
 
 			return seq
 		}
@@ -187,6 +187,10 @@ func (w *Workspace) RemoveRepo(r *Repo) error {
 	repos := w.reposNode()
 	repos.Content = slices.Delete(repos.Content, i, i+1)
 
+	if len(repos.Content) == 0 {
+		w.dropKey(keyRepos)
+	}
+
 	if err := writeYAML(w.file(), &w.doc); err != nil {
 		return err
 	}
@@ -194,4 +198,16 @@ func (w *Workspace) RemoveRepo(r *Repo) error {
 	w.Repos = slices.Delete(w.Repos, i, i+1)
 
 	return nil
+}
+
+func (w *Workspace) dropKey(key string) {
+	root := w.root()
+
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		if root.Content[i].Value == key {
+			root.Content = slices.Delete(root.Content, i, i+2)
+
+			return
+		}
+	}
 }

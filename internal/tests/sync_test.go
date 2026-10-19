@@ -22,7 +22,7 @@ func TestSync_AdoptsTheOneExistingCloneWhoseOriginMatches(t *testing.T) {
 synced: []
 cloned: []
 adopted:
-  - id: `+remotes["collector"][:len(remotes["collector"])-len(".git")]+`
+  - id: `+fixtures.RepoID(remotes["collector"])+`
     path: `+clone+`
 skipped: []
 failed: []
@@ -58,7 +58,7 @@ func TestSync_FetchesExistingClonesWithoutTouchingTheWorkingTree(t *testing.T) {
 
 	require.YAMLEq(t, `
 synced:
-  - id: `+remotes["collector"][:len(remotes["collector"])-len(".git")]+`
+  - id: `+fixtures.RepoID(remotes["collector"])+`
     branch: master
     dirty: false
     ahead: 0
@@ -84,7 +84,7 @@ func TestSync_WithoutATerminalSyncsTheRestThenAsksForWhatItCannotPlace(t *testin
 	require.Equal(t, cli.ExitNeedsPath, res.Code)
 	require.Contains(t, res.Stdout, "adopted:\n  - id: ")
 	require.Contains(t, res.Stdout, `needs_path:
-  - id: `+remotes["gateway"][:len(remotes["gateway"])-len(".git")]+`
+  - id: `+fixtures.RepoID(remotes["gateway"])+`
     alias: gateway
     candidates: []
 hint: mur repo locate <alias|url> <dir> --workspace team
@@ -112,7 +112,7 @@ func TestSync_SkipsStatusesThatOptOutUnlessAskedForAll(t *testing.T) {
 	remotes := home.Team(fixtures.TeamRepo{Name: "collector", Status: "live"}, fixtures.TeamRepo{Name: "exporter", Status: "dead"})
 	home.Clone(remotes["collector"], "projects/collector")
 	home.Clone(remotes["exporter"], "projects/exporter")
-	exporterID := remotes["exporter"][:len(remotes["exporter"])-len(".git")]
+	exporterID := fixtures.RepoID(remotes["exporter"])
 
 	res := home.Mur("sync", "--workspace", "team").OK(t)
 	require.Contains(t, res.Stdout, "skipped:\n  - id: "+exporterID+"\n    reason: status dead has sync false\n")
@@ -168,9 +168,9 @@ func TestSync_AtATerminalAsksForEachRepoItCannotPlace(t *testing.T) {
 
 	require.Equal(t, cli.ExitNeedsPath, res.Code)
 	require.Contains(t, res.Stderr, "collector")
-	require.Contains(t, res.Stdout, "adopted:\n  - id: "+remotes["collector"][:len(remotes["collector"])-len(".git")]+"\n    path: "+second+"\n")
-	require.Contains(t, res.Stdout, "cloned:\n  - id: "+remotes["gateway"][:len(remotes["gateway"])-len(".git")]+"\n")
-	require.Contains(t, res.Stdout, "needs_path:\n  - id: "+remotes["billing"][:len(remotes["billing"])-len(".git")]+"\n")
+	require.Contains(t, res.Stdout, "adopted:\n  - id: "+fixtures.RepoID(remotes["collector"])+"\n    path: "+second+"\n")
+	require.Contains(t, res.Stdout, "cloned:\n  - id: "+fixtures.RepoID(remotes["gateway"])+"\n")
+	require.Contains(t, res.Stdout, "needs_path:\n  - id: "+fixtures.RepoID(remotes["billing"])+"\n")
 	require.Equal(t, "initial commit", home.Git(home.Path("code/gateway"), "log", "-1", "--format=%s"))
 }
 

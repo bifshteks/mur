@@ -104,3 +104,20 @@ func (h *Home) PublishSource(dir, name string) string {
 
 	return bare
 }
+
+// RepoID is the id mur gives a local bare remote: its path without .git.
+func RepoID(remote string) string {
+	return strings.TrimSuffix(remote, ".git")
+}
+
+// EmptyRemote is a bare repo with no commits yet, like a project just created
+// on GitLab.
+func (h *Home) EmptyRemote(name string) string {
+	h.t.Helper()
+
+	bare := h.Path("remotes/" + name + ".git")
+	require.NoError(h.t, os.MkdirAll(bare, 0o750))
+	h.Git(bare, "init", "-q", "--bare")
+
+	return bare
+}

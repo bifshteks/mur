@@ -65,19 +65,19 @@ func (a *app) statePushCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			st, err := a.loadState()
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			p, err := a.sharedStatePath(cmd.Context(), st, f)
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			if err := st.WithTilde(a.env.Getenv("HOME")).Save(p); err != nil {
-				return fail(err)
+				return err
 			}
 
-			return fail(a.print(pushOutput{Path: p}))
+			return a.print(pushOutput{Path: p})
 		},
 	}
 	f.bind(cmd)
@@ -100,7 +100,7 @@ func (a *app) statePullCommand() *cobra.Command {
 		Short: "Merge users/<email>/state.yaml from a source: local entries win, missing sources are cloned",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return fail(a.statePull(cmd.Context(), f))
+			return a.statePull(cmd.Context(), f)
 		},
 	}
 	f.bind(cmd)
@@ -155,8 +155,8 @@ func (a *app) attachShared(ctx context.Context, src state.Source) error {
 			return failf("source %s has no remote and is not at %s", src.Name, src.Path)
 		}
 
-		if _, err := a.git.Run(ctx, "", "clone", "-q", src.Remote, src.Path); err != nil {
-			return err
+		if _, err := a.git.Run(ctx, "", "clone", "-q", "--", src.Remote, src.Path); err != nil {
+			return failf("source %s: clone %s: %w", src.Name, src.Remote, err)
 		}
 	}
 

@@ -61,7 +61,7 @@ func TestNewLaptop_SourceAddStatePullSyncRestoresTheWorkspace(t *testing.T) {
 	require.Equal(t, cli.ExitNeedsPath, res.Code)
 	require.Equal(t, "initial commit", fresh.Git(fresh.Path("projects/collector"), "log", "-1", "--format=%s"))
 	require.Equal(t, "initial commit", fresh.Git(fresh.Path("projects/platform/gateway"), "log", "-1", "--format=%s"))
-	require.Contains(t, res.Stdout, "needs_path:\n  - id: "+remotes["billing"][:len(remotes["billing"])-len(".git")]+"\n")
+	require.Contains(t, res.Stdout, "needs_path:\n  - id: "+fixtures.RepoID(remotes["billing"])+"\n")
 }
 
 func TestStatePull_KeepsWhatThisLaptopAlreadyDecided(t *testing.T) {

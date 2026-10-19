@@ -54,12 +54,12 @@ func (a *app) agentGuideCommand(root *cobra.Command) *cobra.Command {
 		RunE: func(_ *cobra.Command, _ []string) error {
 			guide, err := renderGuide(root)
 			if err != nil {
-				return fail(err)
+				return err
 			}
 
 			_, err = fmt.Fprint(a.env.Stdout, guide)
 
-			return fail(err)
+			return err
 		},
 	}
 }
@@ -98,7 +98,7 @@ func writeCommands(b *strings.Builder, cmd *cobra.Command) {
 			continue
 		}
 
-		if c.Runnable() {
+		if c.Runnable() && !c.HasSubCommands() {
 			path := strings.TrimPrefix(c.CommandPath(), "mur ")
 			args := strings.TrimPrefix(c.Use, c.Name())
 			fmt.Fprintf(b, "mur %s%s — %s\n", path, args, c.Short)

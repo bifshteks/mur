@@ -97,7 +97,7 @@ func (a *app) resolveCommand() *cobra.Command {
 		Short: "Show what each named repo is and where it is cloned",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			return fail(a.resolve(ws, args, pathOnly))
+			return a.resolve(ws, args, pathOnly)
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to resolve in (default $MUR_WORKSPACE, then the active one)")
