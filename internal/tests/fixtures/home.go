@@ -102,6 +102,7 @@ func (h *Home) run(tty bool, input string, args []string) Result {
 func (h *Home) Git(dir string, args ...string) string {
 	h.t.Helper()
 
+	//nolint:gosec // args are written by the test itself
 	cmd := exec.CommandContext(h.t.Context(), "git", append([]string{"-C", dir}, args...)...)
 	cmd.Env = h.env
 	out, err := cmd.CombinedOutput()
@@ -110,7 +111,7 @@ func (h *Home) Git(dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// EmptyRepo is a freshly initialised git repo with no commits, like a project
+// EmptyRepo is a freshly initialized git repo with no commits, like a project
 // just created on GitLab and cloned.
 func (h *Home) EmptyRepo(rel string) string {
 	h.t.Helper()

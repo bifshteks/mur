@@ -11,6 +11,8 @@ import (
 // Every node mur creates is block style, set explicitly, so no file it writes
 // ever gains flow {…} or […] collections.
 
+const seqTag = "!!seq"
+
 func scalar(v string) *yaml.Node {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: v}
 }
@@ -41,7 +43,7 @@ func writeYAML(path string, n *yaml.Node) error {
 }
 
 func sequence(items []string) *yaml.Node {
-	n := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	n := &yaml.Node{Kind: yaml.SequenceNode, Tag: seqTag}
 	for _, it := range items {
 		n.Content = append(n.Content, scalar(it))
 	}

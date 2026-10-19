@@ -120,7 +120,7 @@ func (a *app) resolve(ws string, queries []string, pathOnly bool) error {
 			return err
 		}
 
-		v := a.repoView(w, st, r)
+		v := a.repoView(w, st, &r)
 		v.Query = q
 		views = append(views, v)
 	}
@@ -131,9 +131,9 @@ func (a *app) resolve(ws string, queries []string, pathOnly bool) error {
 
 	var missing []needsPathEntry
 
-	for _, v := range views {
-		if v.Path == "" {
-			missing = append(missing, needsPathEntry{ID: v.ID, Alias: firstOf(v.Aliases), Candidates: []string{}})
+	for i := range views {
+		if views[i].Path == "" {
+			missing = append(missing, needsPathEntry{ID: views[i].ID, Alias: firstOf(views[i].Aliases), Candidates: []string{}})
 		}
 	}
 
@@ -145,8 +145,8 @@ func (a *app) resolve(ws string, queries []string, pathOnly bool) error {
 		}
 	}
 
-	for _, v := range views {
-		if _, err := fmt.Fprintln(a.env.Stdout, v.Path); err != nil {
+	for i := range views {
+		if _, err := fmt.Fprintln(a.env.Stdout, views[i].Path); err != nil {
 			return fmt.Errorf("print path: %w", err)
 		}
 	}

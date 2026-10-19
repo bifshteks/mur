@@ -33,7 +33,7 @@ func (a *app) repoAddCommand() *cobra.Command {
 
 			r.URL = args[0]
 
-			return fail(a.repoAdd(ws, r))
+			return fail(a.repoAdd(ws, &r))
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to add the repo to")
@@ -47,7 +47,7 @@ func (a *app) repoAddCommand() *cobra.Command {
 	return cmd
 }
 
-func (a *app) repoAdd(ws string, r source.Repo) error {
+func (a *app) repoAdd(ws string, r *source.Repo) error {
 	w, st, err := a.findWorkspace(ws)
 	if err != nil {
 		return err
@@ -109,7 +109,7 @@ func (a *app) repoListCommand() *cobra.Command {
 	var ws string
 
 	cmd := &cobra.Command{
-		Use:   "list",
+		Use:   cmdList,
 		Short: "List the repos of a workspace with their paths",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -120,8 +120,8 @@ func (a *app) repoListCommand() *cobra.Command {
 
 			views := []repoView{}
 
-			for _, r := range w.Repos {
-				v := a.repoView(w, st, r)
+			for i := range w.Repos {
+				v := a.repoView(w, st, &w.Repos[i])
 				v.Workspace = ""
 				views = append(views, v)
 			}
@@ -167,11 +167,11 @@ func (a *app) repoRemove(ws, query string) error {
 
 	a.warnUnknown(w)
 
-	if err := w.RemoveRepo(r); err != nil {
+	if err := w.RemoveRepo(&r); err != nil {
 		return err
 	}
 
-	v := a.repoView(w, st, r)
+	v := a.repoView(w, st, &r)
 	v.Workspace = ""
 
 	return a.print(v)

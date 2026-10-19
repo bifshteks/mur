@@ -23,7 +23,7 @@ type repoView struct {
 	Notes       string   `json:"notes,omitempty"     yaml:"notes,omitempty"`
 }
 
-func (a *app) repoView(w *source.Workspace, st *state.State, r source.Repo) repoView {
+func (a *app) repoView(w *source.Workspace, st *state.State, r *source.Repo) repoView {
 	path := st.Paths[r.ID()]
 
 	return repoView{

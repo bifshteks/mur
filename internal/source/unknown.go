@@ -7,10 +7,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	keyRepos       = "repos"
+	keyDescription = "description"
+	keyStatuses    = "statuses"
+)
+
+//nolint:gochecknoglobals // fixed key lists
 var (
-	workspaceKeys = []string{"summary", "statuses", "repos"}
-	statusKeys    = []string{"name", "description", "sync"}
-	repoKeys      = []string{"url", "description", "aliases", "langs", "status", "notes"}
+	workspaceKeys = []string{"summary", keyStatuses, keyRepos}
+	statusKeys    = []string{"name", keyDescription, "sync"}
+	repoKeys      = []string{"url", keyDescription, "aliases", "langs", "status", "notes"}
 )
 
 // UnknownKeys names keys a newer mur (or a person) added that this mur does not
@@ -27,11 +34,11 @@ func (w *Workspace) UnknownKeys() []string {
 		key, val := root.Content[i].Value, root.Content[i+1]
 
 		switch key {
-		case "statuses":
+		case keyStatuses:
 			for j, item := range val.Content {
 				unknown = append(unknown, unknownIn(fmt.Sprintf("statuses[%d].", j), item, statusKeys)...)
 			}
-		case "repos":
+		case keyRepos:
 			for j, item := range val.Content {
 				unknown = append(unknown, unknownIn(fmt.Sprintf("repos[%d].", j), item, repoKeys)...)
 			}

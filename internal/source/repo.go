@@ -12,14 +12,14 @@ import (
 	"github.com/bifshteks/mur/internal/repoid"
 )
 
-func (r Repo) ID() string {
+func (r *Repo) ID() string {
 	return repoid.Normalize(r.URL)
 }
 
 var ErrInvalid = errors.New("invalid repo")
 
 // AddRepo appends a repo to workspace.yaml, rewriting only the repos node.
-func (w *Workspace) AddRepo(r Repo) error {
+func (w *Workspace) AddRepo(r *Repo) error {
 	if err := w.validateNew(r); err != nil {
 		return err
 	}
@@ -31,17 +31,18 @@ func (w *Workspace) AddRepo(r Repo) error {
 		return err
 	}
 
-	w.Repos = append(w.Repos, r)
+	w.Repos = append(w.Repos, *r)
 
 	return nil
 }
 
-func (w *Workspace) validateNew(r Repo) error {
+func (w *Workspace) validateNew(r *Repo) error {
 	if r.URL == "" || r.Description == "" {
 		return fmt.Errorf("%w: url and description are required", ErrInvalid)
 	}
 
-	for _, have := range w.Repos {
+	for i := range w.Repos {
+		have := &w.Repos[i]
 		if have.ID() == r.ID() {
 			return fmt.Errorf("%w: %s is already in workspace %s", ErrInvalid, r.ID(), w.Name)
 		}
@@ -83,10 +84,10 @@ func (w *Workspace) reposNode() *yaml.Node {
 	root := w.root()
 
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == "repos" {
+		if root.Content[i].Value == keyRepos {
 			seq := root.Content[i+1]
 			if seq.Kind != yaml.SequenceNode {
-				*seq = yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+				*seq = yaml.Node{Kind: yaml.SequenceNode, Tag: seqTag}
 			}
 
 			seq.Style &^= yaml.FlowStyle
@@ -95,14 +96,14 @@ func (w *Workspace) reposNode() *yaml.Node {
 		}
 	}
 
-	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
-	root.Content = append(root.Content, scalar("repos"), seq)
+	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: seqTag}
+	root.Content = append(root.Content, scalar(keyRepos), seq)
 
 	return seq
 }
 
-func repoNode(r Repo) *yaml.Node {
-	n := mapping(scalar("url"), scalar(r.URL), scalar("description"), scalar(r.Description))
+func repoNode(r *Repo) *yaml.Node {
+	n := mapping(scalar("url"), scalar(r.URL), scalar(keyDescription), scalar(r.Description))
 
 	if len(r.Aliases) > 0 {
 		n.Content = append(n.Content, scalar("aliases"), sequence(r.Aliases))
@@ -127,18 +128,18 @@ func repoNode(r Repo) *yaml.Node {
 // any spelling of the url. The first level with a hit wins, so an alias can
 // claim a name another repo's basename also has.
 func (w *Workspace) Match(query string) []Repo {
-	levels := []func(Repo) bool{
-		func(r Repo) bool { return slices.Contains(r.Aliases, query) },
-		func(r Repo) bool { return path.Base(r.ID()) == query },
-		func(r Repo) bool { return r.ID() == repoid.Normalize(query) },
+	levels := []func(*Repo) bool{
+		func(r *Repo) bool { return slices.Contains(r.Aliases, query) },
+		func(r *Repo) bool { return path.Base(r.ID()) == query },
+		func(r *Repo) bool { return r.ID() == repoid.Normalize(query) },
 	}
 
 	for _, matches := range levels {
 		var hits []Repo
 
-		for _, r := range w.Repos {
-			if matches(r) {
-				hits = append(hits, r)
+		for i := range w.Repos {
+			if matches(&w.Repos[i]) {
+				hits = append(hits, w.Repos[i])
 			}
 		}
 
@@ -155,7 +156,9 @@ func (w *Workspace) Match(query string) []Repo {
 func (w *Workspace) Near(query string) []string {
 	near := []string{}
 
-	for _, r := range w.Repos {
+	for i := range w.Repos {
+		r := &w.Repos[i]
+
 		names := append([]string{path.Base(r.ID())}, r.Aliases...)
 		if slices.ContainsFunc(names, func(n string) bool { return strings.Contains(n, query) }) {
 			near = append(near, r.ID())
@@ -166,7 +169,7 @@ func (w *Workspace) Near(query string) []string {
 }
 
 // Alias is the repo's first alias, or empty.
-func (r Repo) Alias() string {
+func (r *Repo) Alias() string {
 	if len(r.Aliases) == 0 {
 		return ""
 	}
@@ -175,7 +178,7 @@ func (r Repo) Alias() string {
 }
 
 // RemoveRepo drops one repo from workspace.yaml, rewriting only the repos node.
-func (w *Workspace) RemoveRepo(r Repo) error {
+func (w *Workspace) RemoveRepo(r *Repo) error {
 	i := slices.IndexFunc(w.Repos, func(have Repo) bool { return have.ID() == r.ID() })
 	if i < 0 {
 		return fmt.Errorf("repo %s: %w", r.ID(), ErrNotFound)

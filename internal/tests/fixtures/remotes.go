@@ -68,8 +68,10 @@ statuses:
 
 	for _, r := range repos {
 		remotes[r.Name] = h.Remote(r.Name)
-		args := []string{"repo", "add", "file://" + remotes[r.Name], "--workspace", "team",
-			"--description", r.Name + " service.", "--alias", r.Name}
+		args := []string{
+			"repo", "add", "file://" + remotes[r.Name], "--workspace", "team",
+			"--description", r.Name + " service.", "--alias", r.Name,
+		}
 
 		if r.Status != "" {
 			args = append(args, "--status", r.Status)
