@@ -1,6 +1,7 @@
 package tests_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -261,4 +262,17 @@ func TestRepoLocate_AcceptsItsOwnCloneAMissingOrAnEmptyDirectory(t *testing.T) {
 	require.Contains(t, home.Mur("repo", "locate", "collector", clone, "--workspace", "team").OK(t).Stdout, "cloned: true")
 	require.Contains(t, home.Mur("repo", "locate", "gateway", "~/code/gateway", "--workspace", "team").OK(t).Stdout, "cloned: false")
 	require.Contains(t, home.Mur("repo", "locate", "billing", "~/code/billing", "--workspace", "team").OK(t).Stdout, "cloned: false")
+}
+
+func TestRepoLocate_AcceptsItsCloneReachedThroughASymlink(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	remotes := home.Team(fixtures.TeamRepo{Name: "collector"})
+	home.Clone(remotes["collector"], "projects/collector")
+	require.NoError(t, os.Symlink(home.Path("projects"), home.Path("code")))
+
+	res := home.Mur("repo", "locate", "collector", "~/code/collector", "--workspace", "team").OK(t)
+
+	require.Contains(t, res.Stdout, "cloned: true")
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -48,11 +49,17 @@ func (g Git) Run(ctx context.Context, dir string, args ...string) (string, error
 	return strings.TrimSpace(stdout.String()), nil
 }
 
-// IsRepo reports whether dir is the top of a git working tree.
+// IsRepo reports whether dir is the top of a git working tree. git answers
+// with symlinks resolved, so dir is resolved too before comparing.
 func (g Git) IsRepo(ctx context.Context, dir string) bool {
 	top, err := g.Run(ctx, dir, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return false
+	}
 
-	return err == nil && top == dir
+	resolved, err := filepath.EvalSymlinks(dir)
+
+	return err == nil && top == resolved
 }
 
 // Origin is the url of the origin remote, empty when there is none.
