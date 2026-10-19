@@ -56,7 +56,8 @@ func (a *app) sync(ctx context.Context, f syncFlags) error {
 
 	repos := make([]reposync.Repo, 0, len(w.Repos))
 
-	for _, r := range w.Repos {
+	for i := range w.Repos {
+		r := &w.Repos[i]
 		if len(f.statuses) > 0 && !slices.Contains(f.statuses, r.Status) {
 			continue
 		}
@@ -74,7 +75,7 @@ func (a *app) sync(ctx context.Context, f syncFlags) error {
 		ask = a.askPath(bufio.NewReader(a.env.Stdin))
 	}
 
-	report, placed := reposync.Run(ctx, a.git, repos, reposync.Options{
+	report, placed := reposync.Run(ctx, a.git, repos, &reposync.Options{
 		ScanRoots:   a.scanRoots(st.ScanRoots),
 		Concurrency: syncConcurrency,
 		Timeout:     syncTimeout,

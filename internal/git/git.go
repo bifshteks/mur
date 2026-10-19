@@ -20,6 +20,7 @@ func (g Git) Run(ctx context.Context, dir string, args ...string) (string, error
 	cmd.Env = g.Environ
 
 	var stdout, stderr bytes.Buffer
+
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 

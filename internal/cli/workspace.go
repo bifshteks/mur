@@ -19,15 +19,15 @@ func (a *app) workspaceCommand() *cobra.Command {
 }
 
 type workspaceEntry struct {
-	Name    string `json:"name"    yaml:"name"`
-	Source  string `json:"source"  yaml:"source"`
-	Summary string `json:"summary" yaml:"summary"`
+	Name    string `json:"name"             yaml:"name"`
+	Source  string `json:"source"           yaml:"source"`
+	Summary string `json:"summary"          yaml:"summary"`
 	Active  bool   `json:"active,omitempty" yaml:"active,omitempty"`
 }
 
 func (a *app) workspaceListCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
+		Use:   cmdList,
 		Short: "List workspaces across all sources",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -185,8 +185,8 @@ func (a *app) workspaceShow(name string) error {
 		Files:    files,
 	}
 
-	for _, r := range w.Repos {
-		v := a.repoView(w, st, r)
+	for i := range w.Repos {
+		v := a.repoView(w, st, &w.Repos[i])
 		v.Workspace = ""
 		out.Repos = append(out.Repos, v)
 	}

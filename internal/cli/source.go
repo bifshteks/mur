@@ -32,7 +32,7 @@ func (a *app) sourceInitCommand() *cobra.Command {
 		Short: "Write a source skeleton into DIR (git init only if DIR is not a repo) and attach it",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fail(a.sourceInit(cmd, args[0], dir))
+			return fail(a.sourceInit(cmd.Context(), args[0], dir))
 		},
 	}
 	cmd.Flags().StringVar(&dir, "path", "", "directory for the source (default $MUR_HOME/sources/<name>)")
@@ -40,7 +40,7 @@ func (a *app) sourceInitCommand() *cobra.Command {
 	return cmd
 }
 
-func (a *app) sourceInit(cmd *cobra.Command, name, dir string) error {
+func (a *app) sourceInit(ctx context.Context, name, dir string) error {
 	st, err := a.loadState()
 	if err != nil {
 		return err
@@ -55,8 +55,8 @@ func (a *app) sourceInit(cmd *cobra.Command, name, dir string) error {
 		return failf("create source dir: %w", err)
 	}
 
-	if !a.git.IsRepo(cmd.Context(), dir) {
-		if _, err := a.git.Run(cmd.Context(), dir, "init", "-q"); err != nil {
+	if !a.git.IsRepo(ctx, dir) {
+		if _, err := a.git.Run(ctx, dir, "init", "-q"); err != nil {
 			return err
 		}
 	}
@@ -65,7 +65,7 @@ func (a *app) sourceInit(cmd *cobra.Command, name, dir string) error {
 		return err
 	}
 
-	src := state.Source{Name: name, Path: dir, Remote: a.git.Origin(cmd.Context(), dir)}
+	src := state.Source{Name: name, Path: dir, Remote: a.git.Origin(ctx, dir)}
 	st.Sources = append(st.Sources, src)
 
 	if err := a.saveState(st); err != nil {
@@ -85,7 +85,7 @@ func (a *app) sourceDir(name, dir string) string {
 
 func (a *app) sourceListCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
+		Use:   cmdList,
 		Short: "List attached sources",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -205,8 +205,8 @@ func (a *app) sourcePull(ctx context.Context, only string) error {
 
 		r := pullResult{Name: s.Name, Result: "pulled"}
 
-		switch {
-		case s.Remote == "":
+		switch s.Remote {
+		case "":
 			r.Result = "skipped: no remote"
 		default:
 			if _, err := a.git.Run(ctx, s.Path, "pull", "-q", "--ff-only"); err != nil {

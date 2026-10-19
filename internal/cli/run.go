@@ -23,9 +23,12 @@ type Env struct {
 	IsTTY   bool
 	Environ []string
 	Dir     string
+
+	Version   string
+	BuildTime string
 }
 
-func (e Env) Getenv(key string) string {
+func (e *Env) Getenv(key string) string {
 	for i := len(e.Environ) - 1; i >= 0; i-- {
 		if k, v, ok := strings.Cut(e.Environ[i], "="); ok && k == key {
 			return v
@@ -35,6 +38,8 @@ func (e Env) Getenv(key string) string {
 	return ""
 }
 
+const cmdList = "list"
+
 // app is one invocation: the env, the output format and the state file.
 type app struct {
 	env  Env
@@ -42,9 +47,10 @@ type app struct {
 	json bool
 }
 
+//nolint:gocritic // Env by value is the agreed test seam; it is copied once per invocation
 func Run(ctx context.Context, env Env) int {
 	a := &app{env: env, git: git.Git{Environ: env.Environ}}
-	root := a.rootCommand()
+	root := a.rootCommand() //nolint:contextcheck // cobra hands ctx to commands via ExecuteContext
 	root.SetArgs(env.Args)
 	root.SetIn(env.Stdin)
 	root.SetOut(env.Stdout)
@@ -111,7 +117,9 @@ func (a *app) rootCommand() *cobra.Command {
 		Short:         "Which repos a workspace has, what each is for, and where each is cloned",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		Version:       a.env.Version,
 	}
+	root.SetVersionTemplate("mur {{.Version}} (built " + a.env.BuildTime + ")\n")
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "print JSON instead of YAML")
 	root.AddCommand(a.sourceCommand(), a.workspaceCommand(), a.repoCommand(), a.resolveCommand(), a.syncCommand(),
 		a.stateCommand(), a.configCommand())

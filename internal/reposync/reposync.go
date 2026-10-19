@@ -35,12 +35,12 @@ type Options struct {
 }
 
 type Report struct {
-	Synced    []Synced    `json:"synced"     yaml:"synced"`
-	Cloned    []Placed    `json:"cloned"     yaml:"cloned"`
-	Adopted   []Placed    `json:"adopted"    yaml:"adopted"`
-	Skipped   []Skipped   `json:"skipped"    yaml:"skipped"`
-	Failed    []Failed    `json:"failed"     yaml:"failed"`
-	NeedsPath []NeedsPath `json:"needs_path" yaml:"needs_path"`
+	Synced    []Synced    `json:"synced"         yaml:"synced"`
+	Cloned    []Placed    `json:"cloned"         yaml:"cloned"`
+	Adopted   []Placed    `json:"adopted"        yaml:"adopted"`
+	Skipped   []Skipped   `json:"skipped"        yaml:"skipped"`
+	Failed    []Failed    `json:"failed"         yaml:"failed"`
+	NeedsPath []NeedsPath `json:"needs_path"     yaml:"needs_path"`
 	Hint      string      `json:"hint,omitempty" yaml:"hint,omitempty"`
 }
 
@@ -82,9 +82,9 @@ func newReport() Report {
 
 // Run places every repo it can, then clones or fetches the placed ones. It
 // returns the report and the paths it decided, for the caller to record.
-func Run(ctx context.Context, g git.Git, repos []Repo, opt Options) (Report, map[string]string) {
-	report := newReport()
-	placed := map[string]string{}
+func Run(ctx context.Context, g git.Git, repos []Repo, opt *Options) (report Report, placed map[string]string) {
+	report = newReport()
+	placed = map[string]string{}
 
 	var (
 		unplaced []Repo
@@ -106,36 +106,7 @@ func Run(ctx context.Context, g git.Git, repos []Repo, opt Options) (Report, map
 	}
 
 	if len(unplaced) > 0 {
-		clones := opt.Clones(ctx, opt.ScanRoots)
-
-		for _, r := range unplaced {
-			candidates := clones[r.ID]
-			if len(candidates) == 1 {
-				placed[r.ID] = candidates[0]
-				report.Adopted = append(report.Adopted, Placed{ID: r.ID, Path: candidates[0]})
-
-				continue
-			}
-
-			if opt.Ask != nil {
-				if p := opt.Ask(r, candidates); p != "" {
-					placed[r.ID] = p
-
-					if isDir(p) {
-						report.Adopted = append(report.Adopted, Placed{ID: r.ID, Path: p})
-					} else {
-						r.Path = p
-						work = append(work, r)
-					}
-
-					continue
-				}
-			}
-
-			report.NeedsPath = append(report.NeedsPath, NeedsPath{
-				ID: r.ID, Alias: r.Alias, Candidates: append([]string{}, candidates...),
-			})
-		}
+		work = append(work, place(ctx, unplaced, opt, &report, placed)...)
 	}
 
 	results := make([]outcome, len(work))
@@ -155,7 +126,7 @@ func Run(ctx context.Context, g git.Git, repos []Repo, opt Options) (Report, map
 			rctx, cancel := context.WithTimeout(ctx, opt.Timeout)
 			defer cancel()
 
-			results[i] = syncOne(rctx, g, r, opt)
+			results[i] = syncOne(rctx, g, &r, opt)
 		}()
 	}
 
@@ -166,6 +137,41 @@ func Run(ctx context.Context, g git.Git, repos []Repo, opt Options) (Report, map
 	}
 
 	return report, placed
+}
+
+// place decides where each unplaced repo goes: the one clone with its origin,
+// or what a person answers. It returns the repos that still need cloning.
+func place(ctx context.Context, unplaced []Repo, opt *Options, report *Report, placed map[string]string) []Repo {
+	var toClone []Repo
+
+	clones := opt.Clones(ctx, opt.ScanRoots)
+
+	for _, r := range unplaced {
+		candidates := clones[r.ID]
+
+		p := ""
+		if len(candidates) == 1 {
+			p = candidates[0]
+		} else if opt.Ask != nil {
+			p = opt.Ask(r, candidates)
+		}
+
+		switch {
+		case p == "":
+			report.NeedsPath = append(report.NeedsPath, NeedsPath{
+				ID: r.ID, Alias: r.Alias, Candidates: append([]string{}, candidates...),
+			})
+		case isDir(p):
+			placed[r.ID] = p
+			report.Adopted = append(report.Adopted, Placed{ID: r.ID, Path: p})
+		default:
+			placed[r.ID] = p
+			r.Path = p
+			toClone = append(toClone, r)
+		}
+	}
+
+	return toClone
 }
 
 // outcome is what happened to one placed repo; exactly one field is set.
@@ -189,7 +195,7 @@ func (o outcome) addTo(r *Report) {
 	}
 }
 
-func syncOne(ctx context.Context, g git.Git, r Repo, opt Options) outcome {
+func syncOne(ctx context.Context, g git.Git, r *Repo, opt *Options) outcome {
 	failed := func(err error) outcome { return outcome{failed: &Failed{ID: r.ID, Error: err.Error()}} }
 
 	if _, err := os.Stat(r.Path); os.IsNotExist(err) {
@@ -217,7 +223,7 @@ func syncOne(ctx context.Context, g git.Git, r Repo, opt Options) outcome {
 		return outcome{synced: &s}
 	}
 
-	if reason := pullBlocker(ctx, g, r, s); reason != "" {
+	if reason := pullBlocker(ctx, g, r, &s); reason != "" {
 		return outcome{skipped: &Skipped{ID: r.ID, Reason: "fetched, not pulled: " + reason}}
 	}
 
@@ -234,7 +240,7 @@ func syncOne(ctx context.Context, g git.Git, r Repo, opt Options) outcome {
 
 // pullBlocker says why a fast-forward would be unsafe: only a clean tree on
 // the remote's default branch is touched, so in-progress work never moves.
-func pullBlocker(ctx context.Context, g git.Git, r Repo, s Synced) string {
+func pullBlocker(ctx context.Context, g git.Git, r *Repo, s *Synced) string {
 	if s.Dirty {
 		return "working tree dirty"
 	}
@@ -258,7 +264,7 @@ func isDir(p string) bool {
 }
 
 // where reports a clone's branch, dirtiness and distance from its upstream.
-func where(ctx context.Context, g git.Git, r Repo) (Synced, error) {
+func where(ctx context.Context, g git.Git, r *Repo) (Synced, error) {
 	s := Synced{ID: r.ID}
 
 	branch, err := g.Run(ctx, r.Path, "rev-parse", "--abbrev-ref", "HEAD")
