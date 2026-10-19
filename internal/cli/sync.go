@@ -259,8 +259,9 @@ func (a *app) askPath(in *lineReader, claimed map[string]string) func(context.Co
 	}
 }
 
-// unusable says why a typed path cannot hold the repo, or "" when it can: it
-// does not exist yet, is empty, or is a clone of exactly this repo.
+// unusable says why a path cannot hold the repo, or "" when it can. It must
+// not already be another repo's path, and must not exist yet, be empty, or be
+// a clone of exactly this repo. The sync prompt and repo locate share it.
 func (a *app) unusable(ctx context.Context, p, id string, claimed map[string]string) string {
 	if other, ok := claimed[p]; ok && other != id {
 		return p + " is already the path of " + other

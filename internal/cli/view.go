@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
+	"github.com/bifshteks/mur/internal/repoid"
 	"github.com/bifshteks/mur/internal/source"
 	"github.com/bifshteks/mur/internal/state"
 )
@@ -24,7 +26,7 @@ type repoView struct {
 	Notes       string   `json:"notes,omitempty"     yaml:"notes,omitempty"`
 }
 
-func (a *app) repoView(w *source.Workspace, st *state.State, r *source.Repo) repoView {
+func (a *app) repoView(ctx context.Context, w *source.Workspace, st *state.State, r *source.Repo) repoView {
 	path := st.Paths[r.ID()]
 
 	return repoView{
@@ -32,7 +34,7 @@ func (a *app) repoView(w *source.Workspace, st *state.State, r *source.Repo) rep
 		ID:          r.ID(),
 		URL:         r.URL,
 		Path:        path,
-		Cloned:      path != "" && isClone(path),
+		Cloned:      path != "" && a.isClone(ctx, path, r.ID()),
 		Description: r.Description,
 		Aliases:     r.Aliases,
 		Langs:       r.Langs,
@@ -41,12 +43,15 @@ func (a *app) repoView(w *source.Workspace, st *state.State, r *source.Repo) rep
 	}
 }
 
-// isClone is what sync counts as cloned: an empty or missing directory is
-// still a place to clone into.
-func isClone(p string) bool {
-	_, err := os.Stat(filepath.Join(p, ".git"))
+// isClone is what sync counts as this repo's clone: a git repo whose origin is
+// the repo. An empty or missing directory is still a place to clone into, and
+// another repo's clone is not this one, however its path got recorded.
+func (a *app) isClone(ctx context.Context, p, id string) bool {
+	if _, err := os.Stat(filepath.Join(p, ".git")); err != nil {
+		return false
+	}
 
-	return err == nil
+	return repoid.Normalize(a.git.Origin(ctx, p)) == id
 }
 
 func isDir(p string) bool {
@@ -56,11 +61,11 @@ func isDir(p string) bool {
 }
 
 // repoViews shows every repo of a workspace, without repeating the workspace.
-func (a *app) repoViews(w *source.Workspace, st *state.State) []repoView {
+func (a *app) repoViews(ctx context.Context, w *source.Workspace, st *state.State) []repoView {
 	views := make([]repoView, 0, len(w.Repos))
 
 	for i := range w.Repos {
-		v := a.repoView(w, st, &w.Repos[i])
+		v := a.repoView(ctx, w, st, &w.Repos[i])
 		v.Workspace = ""
 		views = append(views, v)
 	}

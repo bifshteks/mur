@@ -83,13 +83,6 @@ func (h *Home) MurTTY(input string, args ...string) Result {
 	return h.run(true, input, args)
 }
 
-// MurCtx runs mur non-interactively under ctx, so a test can interrupt it.
-func (h *Home) MurCtx(ctx context.Context, args ...string) Result {
-	h.t.Helper()
-
-	return h.runCtx(ctx, false, "", args)
-}
-
 // MurTTYCtx runs mur at a terminal under ctx.
 func (h *Home) MurTTYCtx(ctx context.Context, input string, args ...string) Result {
 	h.t.Helper()

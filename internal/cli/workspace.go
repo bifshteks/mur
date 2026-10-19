@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 
 	"github.com/spf13/cobra"
@@ -33,7 +34,7 @@ func (a *app) workspaceListCommand() *cobra.Command {
 		Use:   cmdList,
 		Short: "List workspaces across all sources",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			cat, st, err := a.catalog()
 			if err != nil {
 				return err
@@ -54,7 +55,7 @@ func (a *app) workspaceListCommand() *cobra.Command {
 			for _, w := range all {
 				e := workspaceEntry{Name: w.Name, Source: w.Source, Summary: w.Summary, Active: w.Qualified() == active}
 				if withRepos {
-					e.Repos = a.repoViews(w, st)
+					e.Repos = a.repoViews(cmd.Context(), w, st)
 				}
 
 				out = append(out, e)
@@ -162,13 +163,13 @@ func (a *app) workspaceShowCommand() *cobra.Command {
 		Use:   "show [name]",
 		Short: "Everything to read before working across a workspace: summary, README, repos with paths, extra files",
 		Args:  cobra.MaximumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			return a.workspaceShow(firstOf(args))
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return a.workspaceShow(cmd.Context(), firstOf(args))
 		},
 	}
 }
 
-func (a *app) workspaceShow(name string) error {
+func (a *app) workspaceShow(ctx context.Context, name string) error {
 	w, st, err := a.readWorkspace(name)
 	if err != nil {
 		return err
@@ -196,7 +197,7 @@ func (a *app) workspaceShow(name string) error {
 	}
 
 	for i := range w.Repos {
-		v := a.repoView(w, st, &w.Repos[i])
+		v := a.repoView(ctx, w, st, &w.Repos[i])
 		v.Workspace = ""
 		out.Repos = append(out.Repos, v)
 	}

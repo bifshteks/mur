@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -96,8 +97,8 @@ func (a *app) resolveCommand() *cobra.Command {
 		Use:   "resolve <alias|basename|url>...",
 		Short: "Show what each named repo is and where it is cloned",
 		Args:  cobra.MinimumNArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
-			return a.resolve(ws, args, pathOnly)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return a.resolve(cmd.Context(), ws, args, pathOnly)
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to resolve in (default $MUR_WORKSPACE, then the active one)")
@@ -106,7 +107,7 @@ func (a *app) resolveCommand() *cobra.Command {
 	return cmd
 }
 
-func (a *app) resolve(ws string, queries []string, pathOnly bool) error {
+func (a *app) resolve(ctx context.Context, ws string, queries []string, pathOnly bool) error {
 	w, st, err := a.readWorkspace(ws)
 	if err != nil {
 		return err
@@ -120,7 +121,7 @@ func (a *app) resolve(ws string, queries []string, pathOnly bool) error {
 			return err
 		}
 
-		v := a.repoView(w, st, &r)
+		v := a.repoView(ctx, w, st, &r)
 		v.Query = q
 		views = append(views, v)
 	}
