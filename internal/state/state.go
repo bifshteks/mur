@@ -1,6 +1,7 @@
 package state
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -44,8 +45,16 @@ func Load(path string) (*State, error) {
 }
 
 func (s *State) Save(path string) error {
-	data, err := yaml.Marshal(s)
-	if err != nil {
+	var buf bytes.Buffer
+
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+
+	if err := enc.Encode(s); err != nil {
+		return fmt.Errorf("encode state: %w", err)
+	}
+
+	if err := enc.Close(); err != nil {
 		return fmt.Errorf("encode state: %w", err)
 	}
 
@@ -53,7 +62,7 @@ func (s *State) Save(path string) error {
 		return fmt.Errorf("create state dir: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	if err := os.WriteFile(path, buf.Bytes(), 0o600); err != nil {
 		return fmt.Errorf("write state: %w", err)
 	}
 

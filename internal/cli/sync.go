@@ -117,7 +117,7 @@ func (a *app) sync(ctx context.Context, f syncFlags) error {
 // scanRoots are where sync looks for clones to adopt, ~ expanded.
 func (a *app) scanRoots(configured []string) []string {
 	if len(configured) == 0 {
-		configured = []string{"~/projects"}
+		configured = defaultScanRoots
 	}
 
 	roots := make([]string, 0, len(configured))
