@@ -222,3 +222,43 @@ func TestRepoRemove_TheLastRepoLeavesNoFlowEmptyList(t *testing.T) {
 
 	require.Equal(t, "summary: x\n", home.ReadFile("projects/mws/workspaces/auditlogs/workspace.yaml"))
 }
+
+func TestRepoLocate_RefusesAnotherReposClone(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	remotes := home.Team(fixtures.TeamRepo{Name: "collector"}, fixtures.TeamRepo{Name: "gateway"})
+	clone := home.Clone(remotes["collector"], "projects/collector")
+
+	res := home.Mur("repo", "locate", "gateway", clone, "--workspace", "team")
+
+	require.Equal(t, cli.ExitError, res.Code)
+	require.Contains(t, res.Stderr, clone+" is not a clone of "+fixtures.RepoID(remotes["gateway"]))
+	require.Equal(t, cli.ExitNeedsPath, home.Mur("resolve", "gateway", "--workspace", "team", "--path").Code)
+}
+
+func TestRepoLocate_RefusesAPathAnotherRepoAlreadyHas(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	remotes := home.Team(fixtures.TeamRepo{Name: "collector"}, fixtures.TeamRepo{Name: "gateway"})
+	home.Mur("repo", "locate", "collector", "~/code/svc", "--workspace", "team").OK(t)
+
+	res := home.Mur("repo", "locate", "gateway", "~/code/svc", "--workspace", "team")
+
+	require.Equal(t, cli.ExitError, res.Code)
+	require.Contains(t, res.Stderr, home.Path("code/svc")+" is already the path of "+fixtures.RepoID(remotes["collector"]))
+}
+
+func TestRepoLocate_AcceptsItsOwnCloneAMissingOrAnEmptyDirectory(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	remotes := home.Team(fixtures.TeamRepo{Name: "collector"}, fixtures.TeamRepo{Name: "gateway"}, fixtures.TeamRepo{Name: "billing"})
+	clone := home.Clone(remotes["collector"], "projects/collector")
+	home.Mkdir("code/gateway")
+
+	require.Contains(t, home.Mur("repo", "locate", "collector", clone, "--workspace", "team").OK(t).Stdout, "cloned: true")
+	require.Contains(t, home.Mur("repo", "locate", "gateway", "~/code/gateway", "--workspace", "team").OK(t).Stdout, "cloned: false")
+	require.Contains(t, home.Mur("repo", "locate", "billing", "~/code/billing", "--workspace", "team").OK(t).Stdout, "cloned: false")
+}

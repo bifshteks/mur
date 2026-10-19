@@ -347,6 +347,8 @@ func TestSync_AnInterruptAtThePromptStopsTheQuestions(t *testing.T) {
 	require.Contains(t, res.Stdout, "alias: gateway")
 }
 
+// repo locate refuses another repo's clone, but a stale path can still arrive
+// from another laptop's pushed state.
 func TestSync_APathHoldingADifferentRepoFailsInsteadOfPassingForIt(t *testing.T) {
 	t.Parallel()
 
@@ -354,7 +356,9 @@ func TestSync_APathHoldingADifferentRepoFailsInsteadOfPassingForIt(t *testing.T)
 	remotes := home.Team(fixtures.TeamRepo{Name: "collector"}, fixtures.TeamRepo{Name: "gateway"})
 	clone := home.Clone(remotes["collector"], "projects/collector")
 	home.Mur("repo", "locate", "collector", clone, "--workspace", "team").OK(t)
-	home.Mur("repo", "locate", "gateway", clone, "--workspace", "team").OK(t)
+	home.WriteFile("projects/mws/users/me@example.com/state.yaml",
+		"paths:\n  "+fixtures.RepoID(remotes["gateway"])+": ~/projects/collector\n")
+	home.Mur("state", "pull", "--source", "mws").OK(t)
 
 	res := home.Mur("sync", "--workspace", "team")
 

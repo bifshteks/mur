@@ -16,6 +16,7 @@ func TestResolve_ByAliasAndBasenameGivesEverythingAboutTheRepos(t *testing.T) {
 	home := fixtures.NewHome(t)
 	home.Auditlogs()
 	collector := home.EmptyRepo("projects/security-services/sec-audit-collector")
+	home.Git(collector, "remote", "add", "origin", fixtures.CollectorURL)
 	home.Mur("repo", "locate", "collector", collector, "--workspace", "auditlogs").OK(t)
 	home.Mur("repo", "locate", "sec-audit-logrotate", "~/projects/security-services/sec-audit-logrotate",
 		"--workspace", "auditlogs").OK(t)
@@ -161,5 +162,22 @@ func TestResolve_AnEmptyDirectoryIsNotACloneYet(t *testing.T) {
 	res := home.Mur("resolve", "collector", "--workspace", "auditlogs").OK(t)
 
 	require.Contains(t, located.Stdout, "cloned: false")
+	require.Contains(t, res.Stdout, "cloned: false")
+}
+
+// A path can still arrive from another laptop's pushed state; resolve must not
+// call another repo's clone this one's.
+func TestResolve_AClonePulledInForTheWrongRepoIsNotCloned(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	remotes := home.Team(fixtures.TeamRepo{Name: "collector"}, fixtures.TeamRepo{Name: "gateway"})
+	home.Clone(remotes["collector"], "projects/collector")
+	home.WriteFile("projects/mws/users/me@example.com/state.yaml",
+		"paths:\n  "+fixtures.RepoID(remotes["gateway"])+": ~/projects/collector\n")
+	home.Mur("state", "pull", "--source", "mws").OK(t)
+
+	res := home.Mur("resolve", "gateway", "--workspace", "team").OK(t)
+
 	require.Contains(t, res.Stdout, "cloned: false")
 }

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 
 	"github.com/bifshteks/mur/internal/source"
@@ -26,14 +28,14 @@ func (a *app) repoAddCommand() *cobra.Command {
 		Use:   "add <url>",
 		Short: "Add a repo to a workspace (writes workspace.yaml; --workspace required)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if ws == "" {
 				return usagef("repo add writes a source; pass --workspace")
 			}
 
 			r.URL = args[0]
 
-			return a.repoAdd(ws, &r)
+			return a.repoAdd(cmd.Context(), ws, &r)
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to add the repo to")
@@ -47,7 +49,7 @@ func (a *app) repoAddCommand() *cobra.Command {
 	return cmd
 }
 
-func (a *app) repoAdd(ws string, r *source.Repo) error {
+func (a *app) repoAdd(ctx context.Context, ws string, r *source.Repo) error {
 	w, st, err := a.findWorkspace(ws)
 	if err != nil {
 		return err
@@ -59,7 +61,7 @@ func (a *app) repoAdd(ws string, r *source.Repo) error {
 		return err
 	}
 
-	return a.print(a.repoView(w, st, r))
+	return a.print(a.repoView(ctx, w, st, r))
 }
 
 type locatedOutput struct {
@@ -75,8 +77,8 @@ func (a *app) repoLocateCommand() *cobra.Command {
 		Use:   "locate <alias|url> <dir>",
 		Short: "Record where a repo is (or should be) cloned on this laptop; dir may not exist yet",
 		Args:  cobra.ExactArgs(2),
-		RunE: func(_ *cobra.Command, args []string) error {
-			return a.repoLocate(ws, args[0], args[1])
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return a.repoLocate(cmd.Context(), ws, args[0], args[1])
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace the repo is in (default $MUR_WORKSPACE, then the active one)")
@@ -84,7 +86,7 @@ func (a *app) repoLocateCommand() *cobra.Command {
 	return cmd
 }
 
-func (a *app) repoLocate(ws, query, dir string) error {
+func (a *app) repoLocate(ctx context.Context, ws, query, dir string) error {
 	w, st, err := a.readWorkspace(ws)
 	if err != nil {
 		return err
@@ -96,13 +98,17 @@ func (a *app) repoLocate(ws, query, dir string) error {
 	}
 
 	p := a.abs(dir)
+	if reason := a.unusable(ctx, p, r.ID(), claimedPaths(st.Paths)); reason != "" {
+		return failf("%s", reason)
+	}
+
 	st.SetPath(r.ID(), p)
 
 	if err := a.saveState(st); err != nil {
 		return err
 	}
 
-	return a.print(locatedOutput{ID: r.ID(), Path: p, Cloned: isClone(p)})
+	return a.print(locatedOutput{ID: r.ID(), Path: p, Cloned: a.isClone(ctx, p, r.ID())})
 }
 
 func (a *app) repoListCommand() *cobra.Command {
@@ -112,7 +118,7 @@ func (a *app) repoListCommand() *cobra.Command {
 		Use:   cmdList,
 		Short: "List the repos of a workspace with their paths",
 		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			w, st, err := a.readWorkspace(ws)
 			if err != nil {
 				return err
@@ -121,7 +127,7 @@ func (a *app) repoListCommand() *cobra.Command {
 			views := []repoView{}
 
 			for i := range w.Repos {
-				v := a.repoView(w, st, &w.Repos[i])
+				v := a.repoView(cmd.Context(), w, st, &w.Repos[i])
 				v.Workspace = ""
 				views = append(views, v)
 			}
@@ -141,12 +147,12 @@ func (a *app) repoRemoveCommand() *cobra.Command {
 		Use:   "remove <alias|url>",
 		Short: "Remove a repo from a workspace (writes workspace.yaml; --workspace required)",
 		Args:  cobra.ExactArgs(1),
-		RunE: func(_ *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			if ws == "" {
 				return usagef("repo remove writes a source; pass --workspace")
 			}
 
-			return a.repoRemove(ws, args[0])
+			return a.repoRemove(cmd.Context(), ws, args[0])
 		},
 	}
 	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to remove the repo from")
@@ -154,7 +160,7 @@ func (a *app) repoRemoveCommand() *cobra.Command {
 	return cmd
 }
 
-func (a *app) repoRemove(ws, query string) error {
+func (a *app) repoRemove(ctx context.Context, ws, query string) error {
 	w, st, err := a.findWorkspace(ws)
 	if err != nil {
 		return err
@@ -171,7 +177,7 @@ func (a *app) repoRemove(ws, query string) error {
 		return err
 	}
 
-	v := a.repoView(w, st, &r)
+	v := a.repoView(ctx, w, st, &r)
 	v.Workspace = ""
 
 	return a.print(v)
