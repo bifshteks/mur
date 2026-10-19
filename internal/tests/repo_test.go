@@ -126,3 +126,60 @@ func TestWorkspaceCreate_RefusesANameThatExists(t *testing.T) {
 	require.Equal(t, cli.ExitError, res.Code)
 	require.Contains(t, res.Stderr, "mws/auditlogs already exists")
 }
+
+func TestRepoRemove_DropsOnlyThatEntryAndKeepsTheRestOfTheFile(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Auditlogs()
+
+	home.Mur("repo", "remove", "collector", "--workspace", "auditlogs").OK(t)
+
+	require.Equal(t, `summary: Audit events of MWS Cloud.
+statuses:
+  - name: live
+    description: Ships, deployed or used.
+  - name: dead
+    description: Superseded. Do not change.
+    sync: false
+repos:
+  - url: git@git.mws-team.ru:mws/security-services/sec-audit-logrotate.git
+    description: Rotates audit log files on nodes.
+`, home.ReadFile("projects/mws/workspaces/auditlogs/workspace.yaml"))
+	require.Equal(t, cli.ExitNotFound, home.Mur("resolve", "collector", "--workspace", "auditlogs").Code)
+}
+
+func TestRepoRemove_IsAWriteAndNeedsTheWorkspaceFlag(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Auditlogs()
+	home.Mur("workspace", "activate", "auditlogs").OK(t)
+
+	require.Equal(t, cli.ExitUsage, home.Mur("repo", "remove", "collector").Code)
+}
+
+func TestRepoList_ShowsEveryRepoOfTheWorkspace(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Auditlogs()
+
+	res := home.Mur("repo", "list", "--workspace", "auditlogs").OK(t)
+
+	require.YAMLEq(t, `
+- id: git.mws-team.ru/mws/security-services/sec-audit-collector
+  url: git@git.mws-team.ru:mws/security-services/sec-audit-collector.git
+  cloned: false
+  description: Reads k8s node files and exports them.
+  aliases:
+    - collector
+  langs:
+    - go
+  status: live
+- id: git.mws-team.ru/mws/security-services/sec-audit-logrotate
+  url: git@git.mws-team.ru:mws/security-services/sec-audit-logrotate.git
+  cloned: false
+  description: Rotates audit log files on nodes.
+`, res.Stdout)
+}

@@ -173,3 +173,22 @@ func (r Repo) Alias() string {
 
 	return r.Aliases[0]
 }
+
+// RemoveRepo drops one repo from workspace.yaml, rewriting only the repos node.
+func (w *Workspace) RemoveRepo(r Repo) error {
+	i := slices.IndexFunc(w.Repos, func(have Repo) bool { return have.ID() == r.ID() })
+	if i < 0 {
+		return fmt.Errorf("repo %s: %w", r.ID(), ErrNotFound)
+	}
+
+	repos := w.reposNode()
+	repos.Content = slices.Delete(repos.Content, i, i+1)
+
+	if err := writeYAML(w.file(), &w.doc); err != nil {
+		return err
+	}
+
+	w.Repos = slices.Delete(w.Repos, i, i+1)
+
+	return nil
+}

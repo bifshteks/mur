@@ -11,7 +11,7 @@ func (a *app) repoCommand() *cobra.Command {
 		Use:   "repo",
 		Short: "Add, list, remove and locate the repos of a workspace",
 	}
-	cmd.AddCommand(a.repoAddCommand(), a.repoLocateCommand())
+	cmd.AddCommand(a.repoAddCommand(), a.repoListCommand(), a.repoRemoveCommand(), a.repoLocateCommand())
 
 	return cmd
 }
@@ -103,4 +103,76 @@ func (a *app) repoLocate(ws, query, dir string) error {
 	}
 
 	return a.print(locatedOutput{ID: r.ID(), Path: p, Cloned: isDir(p)})
+}
+
+func (a *app) repoListCommand() *cobra.Command {
+	var ws string
+
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List the repos of a workspace with their paths",
+		Args:  cobra.NoArgs,
+		RunE: func(_ *cobra.Command, _ []string) error {
+			w, st, err := a.readWorkspace(ws)
+			if err != nil {
+				return fail(err)
+			}
+
+			views := []repoView{}
+
+			for _, r := range w.Repos {
+				v := a.repoView(w, st, r)
+				v.Workspace = ""
+				views = append(views, v)
+			}
+
+			return fail(a.print(views))
+		},
+	}
+	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to list (default $MUR_WORKSPACE, then the active one)")
+
+	return cmd
+}
+
+func (a *app) repoRemoveCommand() *cobra.Command {
+	var ws string
+
+	cmd := &cobra.Command{
+		Use:   "remove <alias|url>",
+		Short: "Remove a repo from a workspace (writes workspace.yaml; --workspace required)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if ws == "" {
+				return usagef("repo remove writes a source; pass --workspace")
+			}
+
+			return fail(a.repoRemove(ws, args[0]))
+		},
+	}
+	cmd.Flags().StringVar(&ws, "workspace", "", "workspace to remove the repo from")
+
+	return cmd
+}
+
+func (a *app) repoRemove(ws, query string) error {
+	w, st, err := a.findWorkspace(ws)
+	if err != nil {
+		return err
+	}
+
+	r, err := matchOne(w, query)
+	if err != nil {
+		return err
+	}
+
+	a.warnUnknown(w)
+
+	if err := w.RemoveRepo(r); err != nil {
+		return err
+	}
+
+	v := a.repoView(w, st, r)
+	v.Workspace = ""
+
+	return a.print(v)
 }
