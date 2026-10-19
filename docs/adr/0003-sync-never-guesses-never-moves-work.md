@@ -12,6 +12,10 @@
   agent harnesses give mur `/dev/null`. Without a terminal, sync finishes
   everything else and exits 3 with `needs_path`, so an agent never blocks.
 - Adopting only records the path. The clone is fetched on the next sync.
+- A recorded path is trusted only while its origin is that repo; otherwise the
+  repo lands in `failed` with what the path holds. At the prompt one
+  directory cannot be given to two repos, and a number must be a listed
+  candidate.
 - Existing clones get `git fetch --prune` only. `--pull` fast-forwards
   (`merge --ff-only @{upstream}` after the fetch) only a clean tree on
   `origin/HEAD`'s branch. Anything else lands in `skipped` with

@@ -68,7 +68,7 @@ func (a *app) sync(ctx context.Context, f syncFlags) error {
 
 	var ask func(context.Context, reposync.Repo, []string) string
 	if a.env.IsTTY && !f.dryRun {
-		ask = a.askPath(newLineReader(a.env.Stdin))
+		ask = a.askPath(newLineReader(a.env.Stdin), claimedPaths(st.Paths))
 	}
 
 	report, placed := reposync.Run(ctx, a.git, syncRepos(w, st, f), &reposync.Options{
@@ -149,6 +149,17 @@ func syncExit(report *reposync.Report) error {
 	return nil
 }
 
+// claimedPaths inverts the recorded paths, so the prompt can refuse to give one
+// directory to two repos.
+func claimedPaths(paths map[string]string) map[string]string {
+	claimed := make(map[string]string, len(paths))
+	for id, p := range paths {
+		claimed[p] = id
+	}
+
+	return claimed
+}
+
 // scanRoots are where sync looks for clones to adopt, ~ expanded.
 func (a *app) scanRoots(configured []string) []string {
 	if len(configured) == 0 {
@@ -204,7 +215,7 @@ func (lr *lineReader) next(ctx context.Context) (line string, ok bool) {
 // askPath prompts on stderr for where a repo goes: a candidate's number, a
 // path that is that repo's clone, a missing or empty directory to clone into,
 // or nothing to leave it unplaced. An interrupt or EOF counts as nothing.
-func (a *app) askPath(in *lineReader) func(context.Context, reposync.Repo, []string) string {
+func (a *app) askPath(in *lineReader, claimed map[string]string) func(context.Context, reposync.Repo, []string) string {
 	return func(ctx context.Context, r reposync.Repo, candidates []string) string {
 		name := r.Alias
 		if name == "" {
@@ -224,16 +235,24 @@ func (a *app) askPath(in *lineReader) func(context.Context, reposync.Repo, []str
 				return ""
 			}
 
-			if n, err := strconv.Atoi(line); err == nil && n >= 1 && n <= len(candidates) {
-				return candidates[n-1]
+			if n, err := strconv.Atoi(line); err == nil {
+				if n >= 1 && n <= len(candidates) {
+					return candidates[n-1]
+				}
+
+				_, _ = fmt.Fprintf(a.env.Stderr, "%d is not one of the %d candidates; type a path or leave empty\n", n, len(candidates))
+
+				continue
 			}
 
 			p := a.abs(line)
-			if reason := a.unusable(ctx, p, r.ID); reason != "" {
+			if reason := a.unusable(ctx, p, r.ID, claimed); reason != "" {
 				_, _ = fmt.Fprintln(a.env.Stderr, reason)
 
 				continue
 			}
+
+			claimed[p] = r.ID
 
 			return p
 		}
@@ -242,7 +261,11 @@ func (a *app) askPath(in *lineReader) func(context.Context, reposync.Repo, []str
 
 // unusable says why a typed path cannot hold the repo, or "" when it can: it
 // does not exist yet, is empty, or is a clone of exactly this repo.
-func (a *app) unusable(ctx context.Context, p, id string) string {
+func (a *app) unusable(ctx context.Context, p, id string, claimed map[string]string) string {
+	if other, ok := claimed[p]; ok && other != id {
+		return p + " is already the path of " + other
+	}
+
 	entries, err := os.ReadDir(p)
 	if os.IsNotExist(err) || (err == nil && len(entries) == 0) {
 		return ""
