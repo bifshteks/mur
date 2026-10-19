@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -104,4 +105,51 @@ func (s *Source) CreateWorkspace(name, summary string) (*Workspace, error) {
 	}
 
 	return s.LoadWorkspace(name)
+}
+
+// Readme is the workspace's prose description, empty when there is none.
+func (w *Workspace) Readme() (string, error) {
+	data, err := os.ReadFile(filepath.Join(w.Dir, readmeFile))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("read README.md: %w", err)
+	}
+
+	return string(data), nil
+}
+
+// ExtraFiles lists every other file in the workspace directory by absolute
+// path. mur never parses them; the reader opens them on demand.
+func (w *Workspace) ExtraFiles() ([]string, error) {
+	files := []string{}
+
+	err := filepath.WalkDir(w.Dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if p != w.Dir && strings.HasPrefix(d.Name(), ".") {
+			if d.IsDir() {
+				return filepath.SkipDir
+			}
+
+			return nil
+		}
+
+		if d.IsDir() || p == w.file() || p == filepath.Join(w.Dir, readmeFile) {
+			return nil
+		}
+
+		files = append(files, p)
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list workspace files: %w", err)
+	}
+
+	return files, nil
 }

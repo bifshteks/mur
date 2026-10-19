@@ -126,3 +126,60 @@ func TestWorkspaceCreate_RefusesANameThatExists(t *testing.T) {
 	require.Equal(t, cli.ExitError, res.Code)
 	require.Contains(t, res.Stderr, "nimbus/analytics already exists")
 }
+
+func TestRepoRemove_DropsOnlyThatEntryAndKeepsTheRestOfTheFile(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Analytics()
+
+	home.Mur("repo", "remove", "collector", "--workspace", "analytics").OK(t)
+
+	require.Equal(t, `summary: Analytics events of Nimbus Cloud.
+statuses:
+  - name: live
+    description: Ships, deployed or used.
+  - name: dead
+    description: Superseded. Do not change.
+    sync: false
+repos:
+  - url: git@git.nimbus.example:nimbus/services-team/svc-analytics-logrotate.git
+    description: Rotates analytics log files on nodes.
+`, home.ReadFile("projects/nimbus/workspaces/analytics/workspace.yaml"))
+	require.Equal(t, cli.ExitNotFound, home.Mur("resolve", "collector", "--workspace", "analytics").Code)
+}
+
+func TestRepoRemove_IsAWriteAndNeedsTheWorkspaceFlag(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Analytics()
+	home.Mur("workspace", "activate", "analytics").OK(t)
+
+	require.Equal(t, cli.ExitUsage, home.Mur("repo", "remove", "collector").Code)
+}
+
+func TestRepoList_ShowsEveryRepoOfTheWorkspace(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Analytics()
+
+	res := home.Mur("repo", "list", "--workspace", "analytics").OK(t)
+
+	require.YAMLEq(t, `
+- id: git.nimbus.example/nimbus/services-team/svc-analytics-collector
+  url: git@git.nimbus.example:nimbus/services-team/svc-analytics-collector.git
+  cloned: false
+  description: Reads k8s node files and exports them.
+  aliases:
+    - collector
+  langs:
+    - go
+  status: live
+- id: git.nimbus.example/nimbus/services-team/svc-analytics-logrotate
+  url: git@git.nimbus.example:nimbus/services-team/svc-analytics-logrotate.git
+  cloned: false
+  description: Rotates analytics log files on nodes.
+`, res.Stdout)
+}
