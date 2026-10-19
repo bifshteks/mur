@@ -1,6 +1,7 @@
 package fixtures
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -148,4 +149,35 @@ func (h *Home) HangingRemote() (url string, stuck <-chan struct{}) {
 	}()
 
 	return "ssh://git@example.invalid/team/slow.git", started
+}
+
+// MurInterrupted runs mur, waits until git is stuck on a hanging remote, runs
+// meanwhile (if any) while mur is still busy, then interrupts it as Ctrl-C
+// would. It fails the test if mur does not stop promptly.
+func (h *Home) MurInterrupted(stuck <-chan struct{}, meanwhile func(), args ...string) Result {
+	h.t.Helper()
+
+	ctx, interrupt := context.WithCancel(h.t.Context())
+	defer interrupt()
+
+	done := make(chan Result, 1)
+
+	go func() { done <- h.runCtx(ctx, false, "", args) }()
+
+	<-stuck
+
+	if meanwhile != nil {
+		meanwhile()
+	}
+
+	interrupt()
+
+	select {
+	case res := <-done:
+		return res
+	case <-time.After(20 * time.Second):
+		h.t.Fatal("mur did not stop after the interrupt")
+
+		return Result{}
+	}
 }

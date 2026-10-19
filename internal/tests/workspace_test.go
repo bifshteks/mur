@@ -42,3 +42,15 @@ func TestWorkspaceCreate_NeedsSourceFlagWhenSeveralSourcesAreAttached(t *testing
 	require.Equal(t, cli.ExitUsage, res.Code)
 	require.Contains(t, res.Stderr, "--source")
 }
+
+func TestWorkspaceList_WithReposShowsEachWorkspacesRepos(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Auditlogs()
+
+	res := home.Mur("workspace", "list", "--repos").OK(t)
+
+	require.Contains(t, res.Stdout, "  repos:\n    - id: "+fixtures.CollectorID+"\n")
+	require.Contains(t, res.Stdout, "    - id: "+fixtures.LogrotateID+"\n")
+}

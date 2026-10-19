@@ -148,3 +148,18 @@ func TestResolve_AnAliasWinsOverAnotherRepoBasename(t *testing.T) {
 
 	require.Equal(t, "/srv/sec-audit-common\n", res.Stdout)
 }
+
+func TestResolve_AnEmptyDirectoryIsNotACloneYet(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Auditlogs()
+	home.Mkdir("projects/security-services/sec-audit-collector")
+
+	located := home.Mur("repo", "locate", "collector", "~/projects/security-services/sec-audit-collector",
+		"--workspace", "auditlogs").OK(t)
+	res := home.Mur("resolve", "collector", "--workspace", "auditlogs").OK(t)
+
+	require.Contains(t, located.Stdout, "cloned: false")
+	require.Contains(t, res.Stdout, "cloned: false")
+}

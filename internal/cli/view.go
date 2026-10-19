@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/bifshteks/mur/internal/source"
 	"github.com/bifshteks/mur/internal/state"
@@ -31,13 +32,21 @@ func (a *app) repoView(w *source.Workspace, st *state.State, r *source.Repo) rep
 		ID:          r.ID(),
 		URL:         r.URL,
 		Path:        path,
-		Cloned:      path != "" && isDir(path),
+		Cloned:      path != "" && isClone(path),
 		Description: r.Description,
 		Aliases:     r.Aliases,
 		Langs:       r.Langs,
 		Status:      r.Status,
 		Notes:       r.Notes,
 	}
+}
+
+// isClone is what sync counts as cloned: an empty or missing directory is
+// still a place to clone into.
+func isClone(p string) bool {
+	_, err := os.Stat(filepath.Join(p, ".git"))
+
+	return err == nil
 }
 
 func isDir(p string) bool {

@@ -31,18 +31,26 @@ func (s *State) WithTilde(home string) *State {
 	return shared
 }
 
-// withoutSecret drops the password from a url's userinfo, keeping the user.
+// withoutSecret drops credentials from a remote before it is shared. Over
+// http(s) any userinfo may be a token, even alone as the user name; over ssh the
+// user name is the login (git@) and only a password is dropped. scp-style
+// remotes do not parse as urls and carry no secret.
 func withoutSecret(remote string) string {
 	u, err := url.Parse(remote)
 	if err != nil || u.User == nil {
 		return remote
 	}
 
-	if _, hasPassword := u.User.Password(); !hasPassword {
-		return remote
-	}
+	switch u.Scheme {
+	case "http", "https":
+		u.User = nil
+	default:
+		if _, hasPassword := u.User.Password(); !hasPassword {
+			return remote
+		}
 
-	u.User = url.User(u.User.Username())
+		u.User = url.User(u.User.Username())
+	}
 
 	return u.String()
 }
