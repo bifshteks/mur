@@ -85,3 +85,20 @@ type TeamRepo struct {
 	Name   string
 	Status string
 }
+
+// PublishSource commits a local source and pushes it to a fresh bare remote
+// under ~/remotes, as the user does after editing workspaces. It returns the
+// remote's url.
+func (h *Home) PublishSource(dir, name string) string {
+	h.t.Helper()
+
+	bare := h.Path("remotes/" + name + "-source.git")
+	require.NoError(h.t, os.MkdirAll(bare, 0o750))
+	h.Git(bare, "init", "-q", "--bare")
+	h.Git(dir, "add", ".")
+	h.Git(dir, "commit", "-q", "-m", "workspaces")
+	h.Git(dir, "remote", "add", "origin", bare)
+	h.Git(dir, "push", "-q", "-u", "origin", "HEAD:master")
+
+	return bare
+}
