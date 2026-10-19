@@ -44,6 +44,10 @@ type errorOutput struct {
 }
 
 func (a *app) printError(e *exitError) {
+	if e.printed {
+		return
+	}
+
 	if e.detail != nil {
 		_ = encode(a.env.Stderr, e.detail, a.json)
 

@@ -18,6 +18,8 @@ type exitError struct {
 	code   int
 	err    error
 	detail any
+	// printed means the command already wrote its full report to stdout.
+	printed bool
 }
 
 func (e *exitError) Error() string { return e.err.Error() }
