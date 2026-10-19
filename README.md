@@ -6,8 +6,11 @@ reader is an LLM harness: output is YAML (or `--json`), it never prompts without
 a terminal, and its exit codes say what to do next.
 
 ```bash
-brew install --cask bifshteks/tap/mur   # or: go install github.com/bifshteks/mur@latest
+brew tap bifshteks/mur https://github.com/bifshteks/mur   # once: this repo is its own tap
+brew install --cask bifshteks/mur/mur
 ```
+
+Or, with Go: `go install github.com/bifshteks/mur@latest`.
 
 ## Quick start
 
@@ -72,5 +75,5 @@ golangci-lint run ./...
 ```
 
 Releases: push a `vX.Y.Z` tag; goreleaser builds darwin/linux × amd64/arm64 and
-writes `Casks/mur.rb` to `bifshteks/homebrew-tap` (secret
-`HOMEBREW_TAP_GITHUB_TOKEN`). Decisions are in [`docs/adr/`](docs/adr/).
+commits `Casks/mur.rb` to `master` of this repo, which is also the Homebrew tap.
+No extra secret: the workflow's own `GITHUB_TOKEN` writes it. Decisions are in [`docs/adr/`](docs/adr/).

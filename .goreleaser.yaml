@@ -29,12 +29,17 @@ checksum:
 changelog:
   sort: asc
 
+# The cask lives in this repo, which doubles as the tap: users run
+# `brew tap bifshteks/mur https://github.com/bifshteks/mur` once. Each release
+# commits Casks/mur.rb to master with the workflow's own token.
 homebrew_casks:
   - name: mur
     repository:
       owner: bifshteks
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      name: mur
+      branch: master
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    commit_msg_template: "Cask mur {{ .Tag }}"
     directory: Casks
     homepage: https://github.com/bifshteks/mur
     description: Which repos a workspace has, what each is for, and where each is cloned
