@@ -102,7 +102,7 @@ func (a *app) repoLocate(ws, query, dir string) error {
 		return err
 	}
 
-	return a.print(locatedOutput{ID: r.ID(), Path: p, Cloned: isDir(p)})
+	return a.print(locatedOutput{ID: r.ID(), Path: p, Cloned: isClone(p)})
 }
 
 func (a *app) repoListCommand() *cobra.Command {

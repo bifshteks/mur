@@ -148,3 +148,18 @@ func TestResolve_AnAliasWinsOverAnotherRepoBasename(t *testing.T) {
 
 	require.Equal(t, "/srv/svc-analytics-common\n", res.Stdout)
 }
+
+func TestResolve_AnEmptyDirectoryIsNotACloneYet(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Analytics()
+	home.Mkdir("projects/services-team/svc-analytics-collector")
+
+	located := home.Mur("repo", "locate", "collector", "~/projects/services-team/svc-analytics-collector",
+		"--workspace", "analytics").OK(t)
+	res := home.Mur("resolve", "collector", "--workspace", "analytics").OK(t)
+
+	require.Contains(t, located.Stdout, "cloned: false")
+	require.Contains(t, res.Stdout, "cloned: false")
+}

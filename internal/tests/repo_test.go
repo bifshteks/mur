@@ -183,3 +183,42 @@ func TestRepoList_ShowsEveryRepoOfTheWorkspace(t *testing.T) {
   description: Rotates analytics log files on nodes.
 `, res.Stdout)
 }
+
+func TestRepoAdd_RewritesHandWrittenFlowListsInsideReposAsBlocks(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Source("nimbus")
+	home.Mur("workspace", "create", "analytics").OK(t)
+	home.WriteFile("projects/nimbus/workspaces/analytics/workspace.yaml", `summary: x
+repos:
+  - url: git@h:g/common.git
+    description: Shared.
+    aliases: [common]
+`)
+
+	home.Mur("repo", "add", "git@h:g/collector.git", "--workspace", "analytics", "--description", "Collector.").OK(t)
+
+	require.Equal(t, `summary: x
+repos:
+  - url: git@h:g/common.git
+    description: Shared.
+    aliases:
+      - common
+  - url: git@h:g/collector.git
+    description: Collector.
+`, home.ReadFile("projects/nimbus/workspaces/analytics/workspace.yaml"))
+}
+
+func TestRepoRemove_TheLastRepoLeavesNoFlowEmptyList(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Source("nimbus")
+	home.Mur("workspace", "create", "analytics", "--summary", "x").OK(t)
+	home.Mur("repo", "add", "git@h:g/collector.git", "--workspace", "analytics", "--description", "Collector.").OK(t)
+
+	home.Mur("repo", "remove", "collector", "--workspace", "analytics").OK(t)
+
+	require.Equal(t, "summary: x\n", home.ReadFile("projects/nimbus/workspaces/analytics/workspace.yaml"))
+}

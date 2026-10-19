@@ -102,3 +102,61 @@ func TestConfigScanRoots_DecideWhereSyncLooksForClones(t *testing.T) {
 	require.YAMLEq(t, "- ~/code\n- ~/work\n", home.Mur("config", "get", "scan_roots").OK(t).Stdout)
 	require.Contains(t, home.Mur("sync", "--workspace", "team").OK(t).Stdout, "path: "+clone+"\n")
 }
+
+func TestStatePush_NeverPublishesCredentialsFromARemote(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	dir := home.EmptyRepo("projects/nimbus")
+	home.Git(dir, "remote", "add", "origin", "https://oauth2:glpat-SECRET@git.example.com/team/workspace.git")
+	home.Mur("source", "init", "nimbus", "--path", dir).OK(t)
+
+	home.Mur("state", "push", "--source", "nimbus").OK(t)
+
+	pushed := home.ReadFile("projects/nimbus/users/me@example.com/state.yaml")
+	require.NotContains(t, pushed, "SECRET")
+	require.Contains(t, pushed, "remote: https://git.example.com/team/workspace.git")
+}
+
+func TestStatePush_NeverPublishesATokenGivenAsTheUserName(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	dir := home.EmptyRepo("projects/nimbus")
+	home.Git(dir, "remote", "add", "origin", "https://ghp_SECRET@github.com/team/workspace.git")
+	home.Mur("source", "init", "nimbus", "--path", dir).OK(t)
+
+	home.Mur("state", "push", "--source", "nimbus").OK(t)
+
+	require.Contains(t, home.ReadFile("projects/nimbus/users/me@example.com/state.yaml"),
+		"remote: https://github.com/team/workspace.git\n")
+}
+
+func TestStatePush_ScanRootsTravelAsTildePaths(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Source("nimbus")
+	home.Mur("config", "set", "scan_roots", home.Path("code")+",/srv/repos").OK(t)
+
+	home.Mur("state", "push", "--source", "nimbus").OK(t)
+
+	require.Contains(t, home.ReadFile("projects/nimbus/users/me@example.com/state.yaml"), "scan_roots:\n  - ~/code\n  - /srv/repos\n")
+}
+
+func TestStatePull_AFailedSourceCloneNamesTheSourceAndItsRemote(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Source("nimbus")
+	home.WriteFile("projects/nimbus/users/me@example.com/state.yaml", `sources:
+  - name: gone
+    path: ~/sources/gone
+    remote: `+home.Path("remotes/gone.git")+`
+`)
+
+	res := home.Mur("state", "pull", "--source", "nimbus")
+
+	require.Equal(t, cli.ExitError, res.Code)
+	require.Contains(t, res.Stderr, "source gone: clone "+home.Path("remotes/gone.git"))
+}
