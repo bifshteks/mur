@@ -23,3 +23,10 @@ that the ticket requires.
 - Whether Homebrew on Linux installs the cask was not tested. If it does
   not, Linux users use `go install github.com/bifshteks/mur@latest` or the
   release tarball.
+
+## Watch for
+
+goreleaser's docs mark `hooks.post.install` as deprecated in favour of
+`install_steps`. That change is not released yet; it is due in v2.19. The
+release workflow follows `~> v2`, so once v2.19 ships, move the quarantine
+hook to `post.install_steps` before `goreleaser check` starts failing on it.
