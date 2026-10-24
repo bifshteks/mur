@@ -36,3 +36,52 @@ func TestNormalize(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate(t *testing.T) {
+	t.Parallel()
+
+	valid := []string{
+		"git@git.nimbus.example:nimbus/services-team/svc-analytics-collector.git",
+		"git.nimbus.example:nimbus/collector",
+		"https://git.nimbus.example/nimbus/services-team/svc-analytics-collector",
+		"ssh://git@git.nimbus.example:2222/nimbus/collector.git",
+		"git+ssh://git@git.nimbus.example/nimbus/collector.git",
+		"HTTPS://oauth2:secret@git.nimbus.example:443/nimbus/collector/",
+		"git://git.nimbus.example/nimbus/collector",
+		"file:///srv/git/collector.git",
+		"/srv/git/collector.git",
+	}
+
+	for _, url := range valid {
+		t.Run(url, func(t *testing.T) {
+			t.Parallel()
+			require.NoError(t, repoid.Validate(url))
+		})
+	}
+
+	invalid := []string{
+		"",
+		"collector",
+		"git.nimbus.example/nimbus/collector",
+		"./collector",
+		"git@git.nimbus.example:",
+		"git@:nimbus/collector",
+		"https://git.nimbus.example",
+		"https://git.nimbus.example/",
+		"https:///nimbus/collector",
+		"https://git.nimbus.example:port/nimbus/collector",
+		"ftp://git.nimbus.example/nimbus/collector",
+		"file://srv/git/collector",
+		"file:///",
+		"/",
+		"git@git.nimbus.example:nimbus/my collector",
+		" git@git.nimbus.example:nimbus/collector",
+	}
+
+	for _, url := range invalid {
+		t.Run("invalid "+url, func(t *testing.T) {
+			t.Parallel()
+			require.ErrorIs(t, repoid.Validate(url), repoid.ErrInvalid)
+		})
+	}
+}

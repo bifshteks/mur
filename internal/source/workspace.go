@@ -42,7 +42,6 @@ type Repo struct {
 	Aliases     []string `yaml:"aliases"`
 	Langs       []string `yaml:"langs"`
 	Status      string   `yaml:"status"`
-	Notes       string   `yaml:"notes"`
 }
 
 type workspaceYAML struct {

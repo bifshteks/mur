@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/bifshteks/mur/internal/repoid"
 	"github.com/bifshteks/mur/internal/source"
 )
 
@@ -33,6 +34,10 @@ func (a *app) repoAddCommand() *cobra.Command {
 				return usagef("repo add writes a source; pass --workspace")
 			}
 
+			if err := repoid.Validate(args[0]); err != nil {
+				return usagef("%w", err)
+			}
+
 			r.URL = args[0]
 
 			return a.repoAdd(cmd.Context(), ws, &r)
@@ -43,7 +48,6 @@ func (a *app) repoAddCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&r.Aliases, "alias", nil, "workspace-scoped name; repeatable")
 	cmd.Flags().StringArrayVar(&r.Langs, "lang", nil, "language or stack, free text; repeatable")
 	cmd.Flags().StringVar(&r.Status, "status", "", "one of the statuses the workspace declares")
-	cmd.Flags().StringVar(&r.Notes, "notes", "", "operational rules for working in the repo")
 	_ = cmd.MarkFlagRequired("description")
 
 	return cmd

@@ -30,8 +30,8 @@ searching the disk.
    repo is: ask the user, then record it with mur repo locate.
 
 Reads take the workspace from --workspace, then $MUR_WORKSPACE, then the
-active one (mur workspace activate). Writes (repo add, repo remove) require
---workspace. Set MUR_WORKSPACE to pin a workspace for one session.
+active one (mur workspace activate). Writes (repo add, repo remove, status
+add) require --workspace. Set MUR_WORKSPACE to pin a workspace for one session.
 
 Output is YAML; --json prints the same data as JSON. mur never prompts when
 stdin is not a terminal, and never commits or pushes: edits to a source are

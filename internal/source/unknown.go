@@ -17,7 +17,7 @@ const (
 var (
 	workspaceKeys = []string{"summary", keyStatuses, keyRepos}
 	statusKeys    = []string{"name", keyDescription, "sync"}
-	repoKeys      = []string{"url", keyDescription, "aliases", "langs", "status", "notes"}
+	repoKeys      = []string{"url", keyDescription, "aliases", "langs", "status"}
 )
 
 // UnknownKeys names keys a newer mur (or a person) added that this mur does not

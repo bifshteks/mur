@@ -20,9 +20,6 @@ func TestStatePush_WritesThisLaptopUnderTheGitEmailWithTildePaths(t *testing.T) 
 	home.Mur("state", "push", "--source", "nimbus").OK(t)
 
 	require.Equal(t, `active: analytics
-sources:
-  - name: nimbus
-    path: ~/projects/nimbus
 paths:
   git.nimbus.example/nimbus/services-team/svc-analytics-collector: ~/projects/services-team/svc-analytics-collector
 `, home.ReadFile("projects/nimbus/users/me@example.com/state.yaml"))
@@ -103,33 +100,83 @@ func TestConfigScanRoots_DecideWhereSyncLooksForClones(t *testing.T) {
 	require.Contains(t, home.Mur("sync", "--workspace", "team").OK(t).Stdout, "path: "+clone+"\n")
 }
 
-func TestStatePush_NeverPublishesCredentialsFromARemote(t *testing.T) {
+func TestStatePush_NeverPublishesTheSourcesList(t *testing.T) {
 	t.Parallel()
 
 	home := fixtures.NewHome(t)
-	dir := home.EmptyRepo("projects/nimbus")
-	home.Git(dir, "remote", "add", "origin", "https://oauth2:glpat-SECRET@git.example.com/team/workspace.git")
-	home.Mur("source", "init", "nimbus", "--path", dir).OK(t)
+	home.Source("nimbus")
+	dir := home.EmptyRepo("projects/mine")
+	home.Git(dir, "remote", "add", "origin", "https://oauth2:glpat-SECRET@git.example.com/me/workspace.git")
+	home.Mur("source", "init", "mine", "--path", dir).OK(t)
 
 	home.Mur("state", "push", "--source", "nimbus").OK(t)
 
 	pushed := home.ReadFile("projects/nimbus/users/me@example.com/state.yaml")
+	require.NotContains(t, pushed, "sources:")
+	require.NotContains(t, pushed, "mine")
 	require.NotContains(t, pushed, "SECRET")
-	require.Contains(t, pushed, "remote: https://git.example.com/team/workspace.git")
 }
 
-func TestStatePush_NeverPublishesATokenGivenAsTheUserName(t *testing.T) {
+func TestStatePush_CarriesOnlyWhatTheSourceDefines(t *testing.T) {
 	t.Parallel()
 
 	home := fixtures.NewHome(t)
-	dir := home.EmptyRepo("projects/nimbus")
-	home.Git(dir, "remote", "add", "origin", "https://ghp_SECRET@github.com/team/workspace.git")
-	home.Mur("source", "init", "nimbus", "--path", dir).OK(t)
+	home.Analytics()
+	home.Source("mine")
+	home.Mur("workspace", "create", "hobby", "--source", "mine").OK(t)
+	home.Mur("repo", "add", "git@github.com:me/blog.git", "--workspace", "hobby", "--description", "My blog.").OK(t)
+	home.Mur("repo", "locate", "collector", "~/work/collector", "--workspace", "analytics").OK(t)
+	home.Mur("repo", "locate", "blog", "~/fun/blog", "--workspace", "hobby").OK(t)
+	home.Mur("workspace", "activate", "hobby").OK(t)
 
 	home.Mur("state", "push", "--source", "nimbus").OK(t)
+	home.Mur("state", "push", "--source", "mine").OK(t)
 
-	require.Contains(t, home.ReadFile("projects/nimbus/users/me@example.com/state.yaml"),
-		"remote: https://github.com/team/workspace.git\n")
+	require.Equal(t, `paths:
+  git.nimbus.example/nimbus/services-team/svc-analytics-collector: ~/work/collector
+`, home.ReadFile("projects/nimbus/users/me@example.com/state.yaml"))
+	require.Equal(t, `active: hobby
+paths:
+  github.com/me/blog: ~/fun/blog
+`, home.ReadFile("projects/mine/users/me@example.com/state.yaml"))
+}
+
+func TestStatePull_WithoutSourceMergesEveryAttachedSource(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Analytics()
+	home.Source("mine")
+	home.Mur("workspace", "create", "hobby", "--source", "mine").OK(t)
+	home.Mur("repo", "add", "git@github.com:me/blog.git", "--workspace", "hobby", "--description", "My blog.").OK(t)
+	home.WriteFile("projects/nimbus/users/me@example.com/state.yaml", `paths:
+  git.nimbus.example/nimbus/services-team/svc-analytics-collector: ~/work/collector
+`)
+	home.WriteFile("projects/mine/users/me@example.com/state.yaml", `active: hobby
+paths:
+  github.com/me/blog: ~/fun/blog
+`)
+
+	res := home.Mur("state", "pull").OK(t)
+
+	require.Contains(t, res.Stdout, "active: hobby\n")
+	require.Equal(t, home.Path("work/collector")+"\n",
+		home.Mur("resolve", "collector", "--workspace", "analytics", "--path").OK(t).Stdout)
+	require.Equal(t, home.Path("fun/blog")+"\n", home.Mur("resolve", "blog", "--path").OK(t).Stdout)
+}
+
+func TestStatePull_WithoutSourceSkipsSourcesWithNoSharedState(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Source("nimbus")
+	home.Source("mine")
+
+	require.Equal(t, cli.ExitNotFound, home.Mur("state", "pull").Code)
+
+	home.WriteFile("projects/mine/users/me@example.com/state.yaml", "scan_roots:\n  - ~/code\n")
+
+	require.Contains(t, home.Mur("state", "pull").OK(t).Stdout, "users/me@example.com/state.yaml\n")
 }
 
 func TestStatePush_ScanRootsTravelAsTildePaths(t *testing.T) {

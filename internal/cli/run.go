@@ -121,7 +121,7 @@ func (a *app) rootCommand() *cobra.Command {
 	}
 	root.SetVersionTemplate("mur {{.Version}} (built " + a.env.BuildTime + ")\n")
 	root.PersistentFlags().BoolVar(&a.json, "json", false, "print JSON instead of YAML")
-	root.AddCommand(a.sourceCommand(), a.workspaceCommand(), a.repoCommand(), a.resolveCommand(), a.syncCommand(),
+	root.AddCommand(a.sourceCommand(), a.workspaceCommand(), a.repoCommand(), a.statusCommand(), a.resolveCommand(), a.syncCommand(),
 		a.stateCommand(), a.configCommand())
 	root.AddCommand(a.agentGuideCommand(root))
 	root.CompletionOptions.DisableDefaultCmd = true

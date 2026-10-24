@@ -24,7 +24,7 @@ func (w *Workspace) AddRepo(r *Repo) error {
 		return err
 	}
 
-	repos := w.reposNode()
+	repos := w.seqNode(keyRepos)
 	repos.Content = append(repos.Content, repoNode(r))
 
 	if err := writeYAML(w.file(), &w.doc); err != nil {
@@ -80,11 +80,12 @@ func (w *Workspace) root() *yaml.Node {
 	return w.doc.Content[0]
 }
 
-func (w *Workspace) reposNode() *yaml.Node {
+// seqNode is the top-level sequence under key, created at the end when absent.
+func (w *Workspace) seqNode(key string) *yaml.Node {
 	root := w.root()
 
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == keyRepos {
+		if root.Content[i].Value == key {
 			seq := root.Content[i+1]
 			if seq.Kind != yaml.SequenceNode {
 				*seq = yaml.Node{Kind: yaml.SequenceNode, Tag: seqTag}
@@ -97,7 +98,7 @@ func (w *Workspace) reposNode() *yaml.Node {
 	}
 
 	seq := &yaml.Node{Kind: yaml.SequenceNode, Tag: seqTag}
-	root.Content = append(root.Content, scalar(keyRepos), seq)
+	root.Content = append(root.Content, scalar(key), seq)
 
 	return seq
 }
@@ -115,10 +116,6 @@ func repoNode(r *Repo) *yaml.Node {
 
 	if r.Status != "" {
 		n.Content = append(n.Content, scalar("status"), scalar(r.Status))
-	}
-
-	if r.Notes != "" {
-		n.Content = append(n.Content, scalar("notes"), scalar(r.Notes))
 	}
 
 	return n
@@ -184,7 +181,7 @@ func (w *Workspace) RemoveRepo(r *Repo) error {
 		return fmt.Errorf("repo %s: %w", r.ID(), ErrNotFound)
 	}
 
-	repos := w.reposNode()
+	repos := w.seqNode(keyRepos)
 	repos.Content = slices.Delete(repos.Content, i, i+1)
 
 	if len(repos.Content) == 0 {

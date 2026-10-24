@@ -23,7 +23,6 @@ type repoView struct {
 	Aliases     []string `json:"aliases,omitempty"   yaml:"aliases,omitempty"`
 	Langs       []string `json:"langs,omitempty"     yaml:"langs,omitempty"`
 	Status      string   `json:"status,omitempty"    yaml:"status,omitempty"`
-	Notes       string   `json:"notes,omitempty"     yaml:"notes,omitempty"`
 }
 
 func (a *app) repoView(ctx context.Context, w *source.Workspace, st *state.State, r *source.Repo) repoView {
@@ -39,7 +38,6 @@ func (a *app) repoView(ctx context.Context, w *source.Workspace, st *state.State
 		Aliases:     r.Aliases,
 		Langs:       r.Langs,
 		Status:      r.Status,
-		Notes:       r.Notes,
 	}
 }
 

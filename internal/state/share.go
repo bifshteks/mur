@@ -2,17 +2,36 @@ package state
 
 import (
 	"maps"
-	"net/url"
 	"path/filepath"
 	"slices"
 	"strings"
 )
 
+// ScopedTo is the part of s that belongs to one source: the paths of the repos
+// its workspaces list, and the active workspace when it is one of them. Other
+// sources, and the paths of repos only they list, stay on this laptop, so a
+// company source never learns about personal projects and the other way round.
+// Scan roots describe this laptop, not any source, and travel with every push.
+func (s *State) ScopedTo(repoIDs map[string]bool, workspaces []string) *State {
+	out := &State{ScanRoots: s.ScanRoots}
+
+	if slices.Contains(workspaces, s.Active) {
+		out.Active = s.Active
+	}
+
+	for id, p := range s.Paths {
+		if repoIDs[id] {
+			out.SetPath(id, p)
+		}
+	}
+
+	return out
+}
+
 // WithTilde is a copy for sharing: every path under home is spelled with ~, so
-// it lands correctly for a different username on another laptop, and no remote
-// carries a password or token into the shared source.
+// it lands correctly for a different username on another laptop.
 func (s *State) WithTilde(home string) *State {
-	shared := s.mapPaths(func(p string) string {
+	return s.mapPaths(func(p string) string {
 		if p == home {
 			return "~"
 		}
@@ -23,36 +42,6 @@ func (s *State) WithTilde(home string) *State {
 
 		return p
 	})
-
-	for i := range shared.Sources {
-		shared.Sources[i].Remote = withoutSecret(shared.Sources[i].Remote)
-	}
-
-	return shared
-}
-
-// withoutSecret drops credentials from a remote before it is shared. Over
-// http(s) any userinfo may be a token, even alone as the user name; over ssh the
-// user name is the login (git@) and only a password is dropped. scp-style
-// remotes do not parse as urls and carry no secret.
-func withoutSecret(remote string) string {
-	u, err := url.Parse(remote)
-	if err != nil || u.User == nil {
-		return remote
-	}
-
-	switch u.Scheme {
-	case "http", "https":
-		u.User = nil
-	default:
-		if _, hasPassword := u.User.Password(); !hasPassword {
-			return remote
-		}
-
-		u.User = url.User(u.User.Username())
-	}
-
-	return u.String()
 }
 
 // Expanded is the inverse of WithTilde, against this laptop's home.

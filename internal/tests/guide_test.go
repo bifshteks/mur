@@ -20,7 +20,7 @@ func TestAgentGuide_NamesEveryCommandOfTheContract(t *testing.T) {
 	for _, cmd := range []string{
 		"source init", "source add", "source list", "source pull", "source remove",
 		"workspace list", "workspace create", "workspace activate", "workspace show",
-		"repo add", "repo list", "repo remove", "repo locate",
+		"repo add", "repo list", "repo remove", "repo locate", "status add",
 		"resolve", "sync", "state push", "state pull", "config get", "config set",
 	} {
 		require.Contains(t, guide, "mur "+cmd+" ", "guide must document %q", cmd)

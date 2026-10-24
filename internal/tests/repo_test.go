@@ -33,7 +33,6 @@ func TestRepoAdd_KeepsCommentsAndUnknownKeysAndWritesBlockStyle(t *testing.T) {
 		"--alias", "collector",
 		"--lang", "go",
 		"--status", "live",
-		"--notes", "Never log event bodies.",
 	).OK(t)
 
 	require.Contains(t, res.Stderr, `unknown key "owner"`)
@@ -51,7 +50,6 @@ repos:
     langs:
       - go
     status: live
-    notes: Never log event bodies.
 `, home.ReadFile("projects/nimbus/workspaces/analytics/workspace.yaml"))
 }
 
@@ -275,4 +273,21 @@ func TestRepoLocate_AcceptsItsCloneReachedThroughASymlink(t *testing.T) {
 	res := home.Mur("repo", "locate", "collector", "~/code/collector", "--workspace", "team").OK(t)
 
 	require.Contains(t, res.Stdout, "cloned: true")
+}
+
+func TestRepoAdd_RejectsAUrlGitCannotClone(t *testing.T) {
+	t.Parallel()
+
+	home := fixtures.NewHome(t)
+	home.Source("nimbus")
+	home.Mur("workspace", "create", "analytics").OK(t)
+
+	for _, url := range []string{"collector", "git.nimbus.example/nimbus/collector", "https://git.nimbus.example", "ftp://git.nimbus.example/nimbus/collector"} {
+		res := home.Mur("repo", "add", url, "--workspace", "analytics", "--description", "Collector.")
+
+		require.Equal(t, cli.ExitUsage, res.Code, url)
+		require.Contains(t, res.Stderr, "not a git url", url)
+	}
+
+	require.Equal(t, "summary: \"\"\n", home.ReadFile("projects/nimbus/workspaces/analytics/workspace.yaml"))
 }
