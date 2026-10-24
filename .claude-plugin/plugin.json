@@ -1,0 +1,8 @@
+{
+  "name": "mur",
+  "description": "Teaches agents to resolve repos, their paths and purpose, through the mur CLI instead of guessing or searching the disk.",
+  "author": {
+    "name": "bifshteks"
+  },
+  "repository": "https://github.com/bifshteks/mur"
+}

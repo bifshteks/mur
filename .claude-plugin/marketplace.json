@@ -1,0 +1,16 @@
+{
+  "name": "mur",
+  "owner": {
+    "name": "bifshteks"
+  },
+  "metadata": {
+    "description": "Agent skill for the mur CLI."
+  },
+  "plugins": [
+    {
+      "name": "mur",
+      "source": "./",
+      "description": "Teaches agents to resolve repos, their paths and purpose, through the mur CLI instead of guessing or searching the disk."
+    }
+  ]
+}

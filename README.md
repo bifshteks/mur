@@ -22,6 +22,20 @@ brew install --cask bifshteks/mur/mur
 go install github.com/bifshteks/mur@latest
 ```
 
+## Agent skill
+
+This repo is also a Claude Code marketplace. Its one plugin ships the
+`mur:repofind` skill, which tells agents to resolve repos through `mur` instead
+of guessing paths or searching the disk:
+
+```bash
+claude plugin marketplace add bifshteks/mur
+claude plugin install mur@mur
+```
+
+The skill only says when to reach for `mur`; the manual is `mur agent-guide`,
+so the skill does not drift from the installed binary.
+
 ## Quick start
 
 ```bash
