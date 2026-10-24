@@ -357,7 +357,13 @@ paths:
   github.com/projectnessie/nessie: ~/projects/nessie
 ```
 
-
+##### Root (`mur.yaml`)
+```
+# Just version of mur.
+# When runs, mur checks what version the configuration was written with.
+# If source is written with newer version - asks to upgrade.
+version: 1
+```
 
 ## Exit codes
 
