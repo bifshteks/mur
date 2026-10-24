@@ -15,4 +15,6 @@ where each is cloned on this machine. Ask it; don't guess.
 3. For each repo you touch, run `mur resolve` and work in the path it returns.
 
 When mur cannot answer, do what `mur agent-guide` says for that case. When `mur`
-is not installed, say so and point at https://github.com/bifshteks/mur.
+is not installed, say so once, point at https://github.com/bifshteks/mur, and
+locate the repos another way: search the disk, keep only a clone whose `origin`
+remote is the repo the task names, and ask the user when none is.
