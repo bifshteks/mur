@@ -36,6 +36,10 @@ claude plugin install mur@mur
 The skill only says when to reach for `mur`; the manual is `mur agent-guide`,
 so the skill does not drift from the installed binary.
 
+The skill is released with the CLI under the same `vX.Y.Z` tag. Each updates on
+its own (`brew upgrade mur`, `claude plugin update mur@mur`), so the two installed
+versions may differ, and that is fine.
+
 ## Quick start
 
 ```bash
@@ -384,6 +388,15 @@ version: 1
 `0` ok · `1` error · `2` usage · `3` needs input (`needs_path`) · `4` not found or
 ambiguous (candidates on stderr).
 
+## Reporting a problem
+
+Include both versions; each is the git tag of the source you ran:
+
+```bash
+mur --version          # the CLI
+claude plugin list     # the skill: the "Version" under mur@mur
+```
+
 ## Development
 
 ```bash
@@ -393,4 +406,8 @@ golangci-lint run ./...
 
 Releases: push a `vX.Y.Z` tag; goreleaser builds darwin/linux × amd64/arm64 and
 commits `Casks/mur.rb` to `master` of this repo, which is also the Homebrew tap.
-No extra secret: the workflow's own `GITHUB_TOKEN` writes it. Decisions are in [`docs/adr/`](docs/adr/).
+No extra secret: the workflow's own `GITHUB_TOKEN` writes it. A second job then
+pins the plugin in `.claude-plugin/marketplace.json` to the tag
+(`tools/pinplugin`), so `master` always offers the last released skill. To try
+unreleased skill changes, run `claude --plugin-dir .` from a checkout.
+Decisions are in [`docs/adr/`](docs/adr/).
