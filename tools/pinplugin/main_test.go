@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -125,6 +126,18 @@ func TestPinKeepsNewerPin(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestPinOverOddPinnedVersion(t *testing.T) {
+	t.Parallel()
+
+	// A version that is not X.Y.Z, set by hand, never blocks a release.
+	for _, pinned := range []string{"0.3.0-dev", "1.0", "df319cc6c031"} {
+		data := strings.Replace(pinnedV020, `"version": "0.2.0"`, `"version": "`+pinned+`"`, 1)
+
+		_, err := Pin([]byte(data), "v0.2.1", "fedcba9876543210fedcba9876543210fedcba98")
+		require.NoError(t, err, pinned)
+	}
+}
+
 func TestPinSameVersionAgain(t *testing.T) {
 	t.Parallel()
 
@@ -134,8 +147,9 @@ func TestPinSameVersionAgain(t *testing.T) {
 	require.Equal(t, pinnedV020, string(got))
 }
 
-// The manifest on this branch is the one the next release pins. A field Pin does
-// not model must fail here, under go test, before goreleaser publishes anything.
+// The manifest at the tag, which is master's unless master moved after tagging.
+// A field Pin does not model fails here, under go test, before goreleaser
+// publishes anything.
 func TestPinRepoMarketplace(t *testing.T) {
 	t.Parallel()
 

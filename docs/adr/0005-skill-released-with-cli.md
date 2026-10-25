@@ -35,9 +35,18 @@ both hides new commits under an old number and stops updates.
   skill changes, use `claude --plugin-dir <checkout>`.
 - Each release adds a second bot commit to `master`, next to `Cask mur vX.Y.Z`.
 - If the push fails, re-run only the `pin-plugin` job; the release itself
-  already exists. `pinplugin` never moves the pin to a lower version, so a re-run
-  of an old release, or a hotfix tag on an older line, leaves the newer pin in
-  place. Prerelease tags (`v1.2.3-rc.1`) release the CLI and skip the pin.
+  already exists. Two releases racing show up the same way: the later push is
+  rejected. There is no concurrency group on purpose: GitHub cancels a waiting
+  job when another queues, which would drop a pin without a failure.
+- `pinplugin` never moves the plugin pin to a lower version, so a re-run of an
+  old release, or a hotfix tag on an older line, leaves the newer pin in place
+  and logs a warning. The cask has no such guard: goreleaser commits it for
+  every tag, including those. Prerelease tags (`v1.2.3-rc.1`) skip the pin.
+- A mistaken high tag (`v10.0.0` for `v1.0.0`) pins 10.0.0, and every later
+  release then warns and leaves it. Fix `version` and `source` on `master` by
+  hand.
+- Rolling back is by hand too: reverting this workflow leaves the last pin in
+  place. Put back `"source": "./"` and remove `version` to track `master` again.
 - A test pins the repo's own marketplace.json, so a manifest field `pinplugin`
   does not model fails `go test` before goreleaser publishes anything, not
   after.

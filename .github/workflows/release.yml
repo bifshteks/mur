@@ -33,9 +33,6 @@ jobs:
   pin-plugin:
     needs: goreleaser
     if: ${{ !contains(github.ref_name, '-') }}
-    concurrency:
-      group: pin-plugin
-      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

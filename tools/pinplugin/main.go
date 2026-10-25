@@ -49,6 +49,8 @@ type gitSource struct {
 
 // Pin returns marketplace with the mur plugin's source set to tag at sha and its
 // version set to the tag without the leading "v". Every other field is kept.
+// It returns ErrNotNewer, and nothing else, when the marketplace already pins a
+// newer X.Y.Z than the tag.
 func Pin(data []byte, tag, sha string) ([]byte, error) {
 	// Stable releases only; the workflow skips pin-plugin for prerelease tags.
 	if !regexp.MustCompile(`^v\d+\.\d+\.\d+$`).MatchString(tag) {
@@ -102,11 +104,11 @@ func Pin(data []byte, tag, sha string) ([]byte, error) {
 // older reports whether X.Y.Z version a is lower than b. A b that is not
 // X.Y.Z, such as none at all before the first release, never blocks a pin.
 func older(a, b string) bool {
-	as, bs := strings.Split(a, "."), strings.Split(b, ".")
-	if len(bs) != len(as) {
+	if !regexp.MustCompile(`^\d+\.\d+\.\d+$`).MatchString(b) {
 		return false
 	}
 
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
 	for i := range as {
 		x, _ := strconv.Atoi(as[i])
 		y, _ := strconv.Atoi(bs[i])
@@ -133,7 +135,9 @@ func main() {
 	}
 
 	if errors.Is(err, ErrNotNewer) {
-		fmt.Println("pinplugin: left as is:", err)
+		// A GitHub Actions annotation, so a release that left the pin alone shows
+		// in the run summary: after a mistaken high tag, every release would.
+		fmt.Println("::warning::pinplugin: left as is:", err)
 
 		return
 	}
