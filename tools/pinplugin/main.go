@@ -8,9 +8,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -18,6 +21,10 @@ const (
 	pluginName      = "mur"
 	repoURL         = "https://github.com/bifshteks/mur.git"
 )
+
+// ErrNotNewer means the marketplace already pins a newer release than the tag:
+// a hotfix on an older line, or an old release's job re-run after a newer one.
+var ErrNotNewer = errors.New("marketplace already pins a newer release")
 
 type marketplace struct {
 	Name     string          `json:"name"`
@@ -43,7 +50,7 @@ type gitSource struct {
 // Pin returns marketplace with the mur plugin's source set to tag at sha and its
 // version set to the tag without the leading "v". Every other field is kept.
 func Pin(data []byte, tag, sha string) ([]byte, error) {
-	// The same tags the release workflow runs on: v*.*.*, no prereleases.
+	// Stable releases only; the workflow skips pin-plugin for prerelease tags.
 	if !regexp.MustCompile(`^v\d+\.\d+\.\d+$`).MatchString(tag) {
 		return nil, fmt.Errorf("tag %q is not vX.Y.Z", tag)
 	}
@@ -70,6 +77,10 @@ func Pin(data []byte, tag, sha string) ([]byte, error) {
 
 	for i := range m.Plugins {
 		if m.Plugins[i].Name == pluginName {
+			if older(tag[1:], m.Plugins[i].Version) {
+				return nil, fmt.Errorf("%w: %s, not %s", ErrNotNewer, m.Plugins[i].Version, tag[1:])
+			}
+
 			m.Plugins[i].Version = tag[1:]
 			m.Plugins[i].Source = source
 			pinned = true
@@ -88,6 +99,26 @@ func Pin(data []byte, tag, sha string) ([]byte, error) {
 	return append(out, '\n'), nil
 }
 
+// older reports whether X.Y.Z version a is lower than b. A b that is not
+// X.Y.Z, such as none at all before the first release, never blocks a pin.
+func older(a, b string) bool {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	if len(bs) != len(as) {
+		return false
+	}
+
+	for i := range as {
+		x, _ := strconv.Atoi(as[i])
+		y, _ := strconv.Atoi(bs[i])
+
+		if x != y {
+			return x < y
+		}
+	}
+
+	return false
+}
+
 func main() {
 	if len(os.Args) != 3 {
 		fmt.Fprintln(os.Stderr, "usage: pinplugin <tag> <sha>")
@@ -99,6 +130,12 @@ func main() {
 	data, err := os.ReadFile(marketplacePath)
 	if err == nil {
 		data, err = Pin(data, tag, sha)
+	}
+
+	if errors.Is(err, ErrNotNewer) {
+		fmt.Println("pinplugin: left as is:", err)
+
+		return
 	}
 
 	if err == nil {

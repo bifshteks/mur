@@ -35,9 +35,14 @@ both hides new commits under an old number and stops updates.
   skill changes, use `claude --plugin-dir <checkout>`.
 - Each release adds a second bot commit to `master`, next to `Cask mur vX.Y.Z`.
 - If the push fails, re-run only the `pin-plugin` job; the release itself
-  already exists.
+  already exists. `pinplugin` never moves the pin to a lower version, so a re-run
+  of an old release, or a hotfix tag on an older line, leaves the newer pin in
+  place. Prerelease tags (`v1.2.3-rc.1`) release the CLI and skip the pin.
+- A test pins the repo's own marketplace.json, so a manifest field `pinplugin`
+  does not model fails `go test` before goreleaser publishes anything, not
+  after.
 - `claude plugin validate` is not run in CI: it would install the Claude Code CLI
-  on every release. `pinplugin` refuses a manifest field it does not know, so it
-  cannot write a shape the validator has not seen.
+  on every release. The pinned shape was validated once by hand when this was
+  written; a change to what `pinplugin` writes needs the same check.
 - The tag scheme stays `vX.Y.Z`. `claude plugin tag`'s `{name}--v{version}` is
   for repos holding several plugins.

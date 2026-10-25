@@ -37,8 +37,12 @@ The skill only says when to reach for `mur`; the manual is `mur agent-guide`,
 so the skill does not drift from the installed binary.
 
 The skill is released with the CLI under the same `vX.Y.Z` tag. Each updates on
-its own (`brew upgrade mur`, `claude plugin update mur@mur`), so the two installed
-versions may differ, and that is fine.
+its own, so the two installed versions may differ, and that is fine:
+
+```bash
+brew upgrade mur                                                    # the CLI
+claude plugin marketplace update mur && claude plugin update mur@mur  # the skill
+```
 
 ## Quick start
 
@@ -396,6 +400,9 @@ Include both versions; each is the git tag of the source you ran:
 mur --version          # the CLI
 claude plugin list     # the skill: the "Version" under mur@mur
 ```
+
+A skill version that is a commit hash, such as `df319cc6c031`, predates v0.2.0;
+update it as above.
 
 ## Development
 

@@ -28,9 +28,14 @@ jobs:
 
   # Points the plugin at this tag (ADR 0005). A job of its own, so a failed push
   # can be re-run without re-running goreleaser. Runs on master as it is after
-  # goreleaser's cask commit, which the tag's checkout does not have.
+  # goreleaser's cask commit, which the tag's checkout does not have. The tag
+  # filter above also matches prereleases (v1.2.3-rc.1); they leave the pin alone.
   pin-plugin:
     needs: goreleaser
+    if: ${{ !contains(github.ref_name, '-') }}
+    concurrency:
+      group: pin-plugin
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -108,4 +109,39 @@ func TestPinRefusesFieldsItWouldDrop(t *testing.T) {
 
 	_, err := Pin([]byte(withKeywords), "v0.2.0", "0123456789abcdef0123456789abcdef01234567")
 	require.ErrorContains(t, err, "keywords")
+}
+
+func TestPinKeepsNewerPin(t *testing.T) {
+	t.Parallel()
+
+	// A hotfix on an older line, or an old release's job re-run after a newer one.
+	_, err := Pin([]byte(pinnedV020), "v0.1.9", "fedcba9876543210fedcba9876543210fedcba98")
+	require.ErrorIs(t, err, ErrNotNewer)
+
+	// Compared as numbers, not strings: 0.10.0 is newer than 0.9.0.
+	pinnedV090, err := Pin([]byte(unpinned), "v0.9.0", "0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
+	_, err = Pin(pinnedV090, "v0.10.0", "fedcba9876543210fedcba9876543210fedcba98")
+	require.NoError(t, err)
+}
+
+func TestPinSameVersionAgain(t *testing.T) {
+	t.Parallel()
+
+	// A re-run of the same release must not fail.
+	got, err := Pin([]byte(pinnedV020), "v0.2.0", "0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
+	require.Equal(t, pinnedV020, string(got))
+}
+
+// The manifest on this branch is the one the next release pins. A field Pin does
+// not model must fail here, under go test, before goreleaser publishes anything.
+func TestPinRepoMarketplace(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("../../.claude-plugin/marketplace.json")
+	require.NoError(t, err)
+
+	_, err = Pin(data, "v999.0.0", "0123456789abcdef0123456789abcdef01234567")
+	require.NoError(t, err)
 }
