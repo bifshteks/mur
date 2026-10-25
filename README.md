@@ -1,396 +1,550 @@
 # mur
 
-`mur` (multi-repository) answers, for a named **workspace**: which repos are in
-it, what each one is for, and where each one is cloned on this laptop. Its main
-reader is an LLM harness: output is YAML (or `--json`), it never prompts without
-a terminal, and its exit codes say what to do next.
+`mur` (multi-repository) is a small CLI that keeps a **map of the git repos you
+work with**. For a named **workspace** it tells you which repos the workspace
+has, what each one is for, and where each one is cloned on this laptop.
 
-## CLI Installation
+```console
+$ mur resolve billing
+- query: billing
+  workspace: nimbus/billing
+  id: git.nimbus.example/nimbus/billing/billing
+  url: git@git.nimbus.example:nimbus/billing/billing.git
+  path: /Users/me/projects/billing
+  cloned: true
+  description: All billing logic. We own it and ship it to prod.
+  aliases:
+    - billing
+  langs:
+    - go
+  status: live
+```
 
-CLI may by installed via different managers:
+It is built for LLM agents first, and works just as well for people:
 
-## brew
+- **Agents stop guessing paths.** Output is YAML (or `--json`). mur never
+  prompts without a terminal, and each exit code tells the agent what to do next.
+- **A team shares one map.** Workspace definitions live in an ordinary git
+  repo (a *source*). A new teammate or a new laptop is set up with three
+  commands.
+- **Call repos what you call them.** `mur resolve front` finds
+  `acme-web-frontend-nextjs-v2` through its alias.
+- **mur doesn't touch your work.** It never commits, never pushes, never pulls
+  over a dirty tree, and never moves a clone.
+
+**Contents**
+
+- [Install](#install)
+- [Tutorial: your first workspace](#tutorial-your-first-workspace)
+- [How-to guides](#how-to-guides)
+- [Reference](#reference)
+- [Explanation](#explanation)
+- [Development](#development)
+
+---
+
+## Install
+
+**Homebrew** (macOS, Linux):
 
 ```bash
 brew tap bifshteks/mur https://github.com/bifshteks/mur   # once: this repo is its own tap
 brew install --cask bifshteks/mur/mur
 ```
 
-## golang
+**Go**:
 
 ```bash
 go install github.com/bifshteks/mur@latest
 ```
 
-## Agent skill
+Check that it works with `mur --help`.
 
-This repo is also a Claude Code marketplace. Its one plugin ships the
-`mur:repofind` skill, which tells agents to resolve repos through `mur` instead
-of guessing paths or searching the disk:
+**Claude Code skill** (optional). This repo is also a Claude Code marketplace.
+Its one plugin ships the `mur:repofind` skill, which tells agents to resolve
+repos through mur instead of guessing paths or searching the disk:
 
 ```bash
 claude plugin marketplace add bifshteks/mur
 claude plugin install mur@mur
 ```
 
-The skill only says when to reach for `mur`; the manual is `mur agent-guide`,
-so the skill does not drift from the installed binary.
+---
 
-## Quick start
+## Tutorial: your first workspace
+
+In about five minutes you will build a source with one workspace, add a repo to
+it, clone it with `mur sync`, and look it up by its alias. Everything runs in a
+scratch directory, so your real mur setup is not touched.
+
+You need `mur`, `git` and network access to github.com.
+
+### 1. Use a scratch mur home
+
+mur keeps its local state in `$MUR_HOME`. Point it at a temporary directory:
 
 ```bash
-# ensure mur is installed
-mur --help
-# add your company existing mur configuration (aka source)
-mur source add nimbus git@git.nimbus.example:nimbus/services-team/junk/workspace.git
-# activate workspace 'analytics', which mur finds in the source
-mur workspace activate analytics
-# adopt existing clones, clone the rest
-mur sync
-# get urls, paths, descriptions, langs, status, notes by searching repository names/aliases
-mur resolve collector logrotate
-# cd into a concrete resolved repository
-cd "$(mur resolve collector --path)"
+export MUR_HOME="$(mktemp -d)"
+mkdir -p ~/mur-tutorial
 ```
 
-On a new laptop, `mur source add` → `mur state pull --source nimbus` → `mur sync`
-restores everything, asking only about repos it cannot place.
+### 2. Create a source
 
-Agents: run `mur agent-guide` once per session. It is generated from the command
-tree, and its examples are checked against real output by the tests.
+A source is a git repo that holds workspace definitions. Create an empty one:
 
-
-## Core idea
-
-Everything `mur` does is just answering a question
-
-> Where is a repo called <qwerty> lives and what is a brief description of it?
-
-<qwerty> here is some exact name, alias or informal name of a repository.
-Thus, instead of always using full path or exact repository name (e.g. "my-long-name-of-some-complex-repo-i-want-to-keep-format-to-avoid-collision"),
-you use the one you use in every day live (e.g. "scratcher").
-
-You give knowledge about your repositories and their description to `mur` - it does not know anything until you explicitly configure it.
-`mur` does not guess - it resolves.
-
-`mur`'s primary focus is companies using multi-repo approach with multiple teams, each working on some subset of the repos.
-
-For example, you have a company called "Nimbus Cloud".
-It has hundreds of repositories and dozens of teams.
-
-```
-Repositories:
-- iam-access-manager
-- iam-role-manager
-- billing
-- vm-virualizizer
-- customer-support
-- managed-postgres
-- managed-k8s
-- ...
+```bash
+mur source init tutorial --path ~/mur-tutorial/source
 ```
 
-Each team has some repository they maintain, and some repository they sometimes need access to
-(for example, to make proper integration with or find out the behaviour nuances of the external system the use)
-```
-## Teams:
-
-security:
-- iam-access-manager    <-- maintain
-- iam-role-manager      <-- maintain
-- billing               <-- integrate with
-
-billing:
-- billing               <-- maintain
-- iam-access-manager    <-- intergrate with
-- managed-postgres      <-- intergrate with
-
-core:
-- vm-virualizizer       <-- maintain
-- iam-access-manager    <-- intergrate with
-
-support:
-- customer-support      <- maintain
-
-managed databases:
-- managed-postgres      <-- maintain
-- managed-k8s           <-- maintain
-- iam-access-manager    <-- intergrate with
-
-...
+```yaml
+name: tutorial
+path: /Users/you/mur-tutorial/source
 ```
 
-In order to power up their developers experience using LLM to work around the company codebase, Nimbus can use `mur`.
-A repository with `mur` configuration is created within Nimbus isolated infrastructure environment (e.g. on-premes GitLab).
+The new directory holds `mur.yaml` and an empty `workspaces/`.
 
-The `mur` config repository contains **Workspaces** - per team description of repositories used by a team in their work.
-Within each **workspace** each team describes list of repositories and how they should treated,
-e.g. for "billing" workspace it would be something like (example in prose):
+### 3. Create a workspace and make it active
 
-> * We use "billing" repository - this is live code. We maintain it and push to prod. This is where all billing logic lives.
-> * We also use "iam-access-manager" repository. We can only read this repo. We call this service's endpoints in order to check permissions.
-> * We also use "openmeter" repository. We do not maintain it. We sometimes read this repo in order to get inspired when thinking about billing features or architecture approaches.
-
-
-
-## Concepts
-
-### Source
-A git checkout holding `mur.yaml` and `workspaces/`.
-Several can be attached. A local-only source (a source with no remote) is also supported.
-
-`mur` can be configured to search from different sources.
-For example, you may have 4:
-* main company's source - your primary job.
-* side company's source - from company you work pro-bono.
-* personal source - you own pet-projects you maintain in the late nights after job.
-* local source - your personal MVP projects you do not dare even publish to github yet.
-
-
-### Workspace
-A named list of repositories within a source.
-
-Think of a **workspace** as a "name of a team".
-For personal **source** it does not make sense to create more than one workspace.
-For a repositories where you touch only part of them - it make sense, e.g.:
-* frontend
-* backend
-
-You create a workspace when you need another set of repositories different from existing workspaces' ones.
-E.g. you were working at billing, and all billing-team worked on all of 30 repositories - everyone changes the code in every of 30 repos.
-Thus, you had workspace
-* billing
-
-But some day you decided to split the team into subteams. Thus, you may split workspaces accordingly:
-
-* billing-core
-* billing-metering
-* billing-payments
-* billing-customer
-
-Thus, each of subteams known and cares only about the repos described in *theirs* workspace.
-
-
-### Repository
-A regular git repository.
-
-### Local state
-`mur` needs some data stored so it does not recalculate it on every run.
-The data includes:
-* a map of `host/path` to full path on local disk
-
-Local state can also be stored within a **Source** (`mur state push`), so if you change your laptop you get the repositories path
-the same as where on previous laptop - all your preferences are kept.
-
-## How to
-
-1. [Optional] Change where will `mur` will search for existing repositories from
-```
-mur config set scan_roots ~/Projects
+```bash
+mur workspace create demo --source tutorial --summary "Repos for the mur tutorial"
+mur workspace activate demo
 ```
 
-2. Initialize a mur configuration source (i.e. create new one)
-
-```
-mkdir path/to/newfolder
-mur source init my-source-name --path path/to/newfolder
+```yaml
+active: tutorial/demo
 ```
 
-This will:
-* create a skeleton of a cur configuration source named "my-source-name" in specified directory (see `mur source init --help` for more info)
-* register it in local mur state, so mur knows about this source
+### 4. Add a repo
 
-3. Add a workspace
-```
-mur workspace create backend --source my-source-name
-```
-
-4. Activate the workspace
-```
-mur workspace activate backend
+```bash
+mur repo add https://github.com/bifshteks/mur.git \
+  --workspace demo \
+  --description "The mur CLI itself" \
+  --lang go \
+  --alias murcli
 ```
 
-This will:
-* add a skeleton of a workspace within a source we just created
+Look it up by its alias:
 
-5. Add a repository to a workspace
-```
-mur repo add git@github.com:bifshteks/mur.git \
-  --workspace backend \
-  --description "Some brief description of the repository"
-  --lang golang
-  --alias aboba
-  --alias pivo
+```bash
+mur resolve murcli
 ```
 
-This will:
-* validate url (any form we can "git clone <url>" is supported)
-* add a repository "git@github.com:bifshteks/mur.git" to a workspace we created with given description and lang.
-  The repository will be searchable by using either of: "aboba", "pivo"
-
-6. [Optional] Validate intermediate result
-```
-mur resolve aboba
-```
-
-This must return the description of the repository you added, but with no "path" key and:
-```
-...
+```yaml
+- query: murcli
+  workspace: tutorial/demo
+  id: github.com/bifshteks/mur
+  url: https://github.com/bifshteks/mur.git
   cloned: false
-...
+  description: The mur CLI itself
+  aliases:
+    - murcli
+  langs:
+    - go
 ```
 
-7. Sync repositories
-```
+mur knows the repo but not where it lives yet: there is no `path`, and
+`cloned` is `false`.
+
+### 5. Choose where it goes, and clone it
+
+```bash
+mur repo locate murcli ~/mur-tutorial/clones/mur
 mur sync
 ```
 
-This:
-* ask for a local path to clone repo into
-* clones all the missing repos
-
-8. [Optional] Validate result
-```
-mur resolve aboba
-```
-
-This must return the description of the repository you added, but now with:
-```
-...
-  path: <local path you specified on prevous step>
-  cloned: true
-...
+```yaml
+synced: []
+cloned:
+  - id: github.com/bifshteks/mur
+    path: /Users/you/mur-tutorial/clones/mur
+adopted: []
+skipped: []
+failed: []
+needs_path: []
 ```
 
-9. [Optional] Save you preferences inside this configuration
-```
-mur state push --source my-source-name
-```
+### 6. Use it
 
-This will:
-* save you resolved paths under `./users/<git login>/state.yaml`.
-
-9. [Optional] Publish the source, so your teammates can use it too
-Git init/add/commit/push the source you just created ("path/to/newfolder" in our example).
-
-> `mur` only writes files. Committing and pushing a source is plain git, yours to do.
-
-
-### Configuration
-
-A source layout is:
-```
-users/
-    some@git.login/          <-- personal configs of some@git.login user that they decided to save in this source
-        state.yaml           <-- state of their "repo:localpath" map
-    another@git.login/
-        state.yaml
-workspaces/
-    some-workspace-name/
-        workspace.yaml       <-- workspace configuration: status list, repo list, their descriptions/aliases/etc
-        README.md            <-- general explanation of this workspace. This will be given to an LLM so it knows "what is your team is doing, what are main rules, what is context of your work". May links any other files in this folder
-        custom.file          <-- any other files you may want to add here. README.md may link to it, so LLM can reach it.
-    another-workspace-name/
-        workspace.yaml
-        README.md
+```bash
+mur resolve murcli            # now with path and cloned: true
+cd "$(mur resolve murcli --path)"
+mur workspace show            # everything an agent reads before it starts work
 ```
 
+You have built a repo map from scratch and used it. To clean up:
 
-#### Reading and manual configuration
-
-
-##### Workspace (`workspaces/some_workspace/workspace.yaml`)
+```bash
+rm -rf ~/mur-tutorial "$MUR_HOME"; unset MUR_HOME
 ```
-# Short description of this workspace.
-# Used by you/yourTeammates/LLM in find out whether this is the right workspace to use.
-summary: ""
 
-# [Optional] List of "tags" you would like to mark repositories in "repos" with.
-# You can add any number of statuses you want.
+Next, [join your team's source](#join-your-teams-source) or
+[build a source for your team](#build-a-source-for-your-team).
+
+---
+
+## How-to guides
+
+### Join your team's source
+
+Your team already keeps a source in git. Attach it, pick your workspace, and
+sync:
+
+```bash
+mur source add nimbus git@git.nimbus.example:nimbus/services-team/junk/workspace.git
+mur workspace list                 # find your team's workspace
+mur workspace activate analytics
+mur sync
+```
+
+By default mur searches `~/projects` for clones you already have. If yours are
+elsewhere, run this before `mur sync`:
+
+```bash
+mur config set scan_roots ~/code,~/work
+```
+
+`mur sync` **adopts** a clone you already have when exactly one clone under the
+scan roots has a matching `origin`. In a terminal, it asks where to clone each
+repo it cannot place. Repos you skip are listed under `needs_path`; see
+[place a repo mur cannot find](#place-a-repo-mur-cannot-find).
+
+### Build a source for your team
+
+```bash
+mur source init nimbus --path ~/projects/nimbus-mur
+mur workspace create billing --source nimbus --summary "Billing team: metering, invoices, payments"
+mur repo add git@git.nimbus.example:nimbus/billing/billing.git \
+  --workspace billing --description "All billing logic. We own it and ship it to prod." \
+  --lang go --alias billing
+```
+
+Then write `workspaces/billing/README.md`. Agents read it through
+`mur workspace show` (see [workspace README](#workspace-readme-and-extra-files)).
+Publish the source yourself; mur never commits or pushes:
+
+```bash
+cd ~/projects/nimbus-mur
+git add . && git commit -m "Add billing workspace"
+git remote add origin git@git.nimbus.example:nimbus/billing/mur.git && git push -u origin HEAD
+```
+
+### Add, change or remove a repo
+
+```bash
+mur repo add <url> --workspace <ws> --description "..." [--alias a]... [--lang l]... [--status s]
+mur repo remove <alias|url> --workspace <ws>
+```
+
+To change a field of an existing repo, edit `workspace.yaml` by hand. mur
+keeps your comments, key order and any keys it does not know when it rewrites
+the file.
+
+### Mark repos with statuses
+
+Declare statuses in `workspace.yaml` **before** using them; `repo add --status`
+refuses one that is not declared:
+
+```yaml
 statuses:
-    # name of a tag
   - name: live
+    description: Ships to prod. Change freely.
+  - name: readonly
+    description: Another team's service. Read it, don't change it.
+  - name: dead
+    description: Superseded. Do not change.
+    sync: false          # not cloned or fetched unless `mur sync --all`
+```
 
-    # what this tag mean
-    description: Ships, deployed or used
+```bash
+mur sync --status live     # sync only live repos
+mur sync --all             # also include statuses with sync: false
+```
 
-    # [Optional, default - true]
-    # If false - repo with this status is not cloned unless "--all"
-    sync: true
+### Keep your clones up to date
 
+```bash
+mur sync            # git fetch --prune every clone; never changes a working tree
+mur sync --pull     # also fast-forward clones that are clean and on their default branch
+mur sync --dry-run  # report only
+```
+
+Clones that were not fast-forwarded are listed under `skipped` with the reason.
+
+### Pull your team's latest workspace definitions
+
+```bash
+mur source pull            # every source
+mur source pull nimbus     # one source
+```
+
+### Place a repo mur cannot find
+
+When `mur sync` exits with code `3`, the repos under `needs_path` have no
+known location. Record one and sync again:
+
+```bash
+mur repo locate front ~/projects/web     # the directory may not exist yet
+mur sync
+```
+
+The directory must be empty, missing, or already a clone of that repo.
+
+### Move to a new laptop
+
+On the old laptop, save where your repos are into the source. Then commit and
+push it yourself:
+
+```bash
+mur state push --source nimbus     # writes users/<your git email>/state.yaml
+```
+
+On the new laptop:
+
+```bash
+mur source add nimbus <source-url>
+mur state pull --source nimbus     # local entries win on conflict
+mur sync
+```
+
+Paths are saved with `~`, so they work under a different home directory.
+
+### Let an AI agent use mur
+
+1. Install the [Claude Code skill](#install), or put the same rule into your
+   agent's instructions: *"Before working in a repo, run `mur resolve <name>`
+   and work in the returned path. Never guess a path."*
+2. The agent runs `mur agent-guide` once per session. It is the full manual,
+   generated from the installed binary, so it always matches its version.
+3. To pin a workspace for one session, set `MUR_WORKSPACE=billing`.
+
+### Keep a personal or local-only source next to your company one
+
+Sources are independent. Attach as many as you like:
+
+```bash
+mur source init personal                        # local only, at $MUR_HOME/sources/personal
+mur workspace create pets --source personal
+mur workspace activate pets                     # switch back with: mur workspace activate billing
+```
+
+`state push` writes only the paths of repos listed in that source's workspaces.
+Your company source never learns about your personal repos.
+
+---
+
+## Reference
+
+### Commands
+
+Every command accepts `--json`. Reads take the workspace from `--workspace`,
+then `$MUR_WORKSPACE`, then the active workspace. Writes (`repo add`,
+`repo remove`) require `--workspace`.
+
+| Command | What it does |
+| --- | --- |
+| `mur resolve <alias\|basename\|url>...` | What each repo is and where it is cloned. `--path` prints only absolute paths. |
+| `mur workspace show [name]` | Summary, README, statuses, repos with paths, extra files. |
+| `mur workspace list [--repos]` | Workspaces across all sources. |
+| `mur workspace create <name>` | Create a workspace in a source (`--source`, `--summary`). |
+| `mur workspace activate <name>` | Make a workspace the default for reads. |
+| `mur repo list` | Repos of a workspace with their paths. |
+| `mur repo add <url>` | Add a repo. `--description` (required), `--alias`, `--lang`, `--status`. |
+| `mur repo remove <alias\|url>` | Remove a repo from a workspace. |
+| `mur repo locate <alias\|url> <dir>` | Record where a repo is, or should be, cloned. |
+| `mur sync` | Adopt existing clones, clone missing repos, fetch the rest. `--pull`, `--dry-run`, `--status`, `--all`. |
+| `mur source init <name>` | Create a source skeleton and attach it (`--path`). |
+| `mur source add <name> <git-url\|path>` | Attach an existing checkout, or clone a url (`--path`). |
+| `mur source list` / `pull [name]` / `remove <name>` | List, fast-forward, or detach sources. Detaching leaves the files on disk. |
+| `mur state push --source <s>` | Write this laptop's state into `users/<email>/state.yaml` of a source. |
+| `mur state pull --source <s>` | Merge that file into local state. Local entries win, and missing sources are cloned. |
+| `mur config get\|set scan_roots [dirs]` | Where `sync` looks for existing clones (default `~/projects`). |
+| `mur agent-guide` | The manual for LLM agents. |
+
+Run `mur <command> --help` for every flag.
+
+### Exit codes
+
+| Code | Meaning | What to do |
+| --- | --- | --- |
+| `0` | ok | |
+| `1` | error | Read stderr. In `sync`, one failing repo does not stop the others. |
+| `2` | usage | Bad flags or arguments, or no workspace selected. |
+| `3` | needs input | `needs_path` lists repos with no known path. Use `mur repo locate`. |
+| `4` | not found or ambiguous | Candidates are printed on stderr. |
+
+### `mur sync` result
+
+| Key | Meaning |
+| --- | --- |
+| `synced` | Fetched. Shows branch, `dirty`, `ahead`, `behind`. |
+| `cloned` | Freshly cloned. |
+| `adopted` | An existing clone was found under the scan roots and recorded. It is fetched on the next sync. |
+| `skipped` | Not touched, or fetched but not pulled. `reason` says why. |
+| `failed` | Something went wrong for this repo only. |
+| `needs_path` | No known location; see exit code `3`. |
+
+### Environment
+
+| Variable | Meaning |
+| --- | --- |
+| `MUR_HOME` | Local state directory. Default `$XDG_CONFIG_HOME/mur`, else `~/.config/mur`. |
+| `MUR_WORKSPACE` | Workspace for reads, overriding the active one. |
+
+### Source layout
+
+```
+mur.yaml                     # version: 1
+workspaces/
+  billing/
+    workspace.yaml           # statuses and repos
+    README.md                # what the team does and its rules; shown to agents
+    architecture.md          # any extra files; listed under `files:` by `workspace show`
+users/
+  me@nimbus.example/
+    state.yaml               # written by `mur state push`
+```
+
+### `workspace.yaml`
+
+```yaml
+summary: Billing team: metering, invoices, payments   # one line; shown in `workspace list`
+
+statuses:                    # optional; a repo's status must be one of these
+  - name: live
+    description: Ships to prod
+    sync: true               # optional, default true; false = sync only with --all
   - name: dead
     description: Superseded. Do not change.
     sync: false
 
-
-# List of repositories that a developer using this workspace touches during their work.
 repos:
-    # Url in any form a "git clone" accepts it: ssh, https, etc.
-  - url: git@github.com/projectnessie/nessie.git
-
-    # [Required] Purpose of this is to give to LLM some context for reasoning whether this is the right repository
-    # to make changes in. Should not be large - LLM receives all of repositories list and all of their descriptions.
-    description: mydescription
-
-    # [Optional] List of nicknames.
-    # When in real life or LLM session you do not really call a repository by its full name (e.g. "clean-architecture-swiftui")
-    # and use some shortened alias - add it here, so mur (and LLM using mur) can find a repo by its alias
-    aliases:
-      - aboba
-
-    # [Optional] Programming languagues used by this repository
-    # Purpose of this - is to help LLM to search within this repo.
-    # No validation on this in mur - you can write in free form.
-    # E.g. if repository's lang is "go", LLM is likely to start with "go.mod" in the root directory or "cmd/" folder.
-    langs:
-      - go
-      - codegen
-
-    # [Optional] "Tag" you mark this repository with
+  - url: git@git.nimbus.example:nimbus/billing/billing.git   # anything `git clone` accepts
+    description: All billing logic. We own it and ship it to prod.   # required; keep it short
+    aliases: [billing]       # names people and agents use for it
+    langs: [go]              # free text; hints where an agent should start reading
     status: live
-
-  - url: git@github.com:nalexn/clean-architecture-swiftui.git
-    description: mydescription
-    aliases:
-      - pivo
 ```
 
-##### Personal state (`users/some@git.login/state.yaml`)
-```
-# name of a workspace currently active.
-# NOTE: This is not updated without "mur state push"
-active: backend
+Keep `description` short. An agent reads every repo's description to decide
+which repo to work in.
 
-# list of folders mur searches for repositories in order to find out whether their clone is already exists or we need to clone it.
+### Workspace README and extra files
+
+`workspaces/<name>/README.md` is printed by `mur workspace show`. Use it to tell
+an agent what the team does, how the repos fit together, and the rules for
+changing them. Any other file in the directory is listed under `files:`, so the
+README can link to longer documents that are opened only on demand.
+
+### Local state (`$MUR_HOME/state.yaml`)
+
+```yaml
+active: billing
+sources:
+  - name: nimbus
+    path: /Users/me/.config/mur/sources/nimbus
 scan_roots:
   - ~/projects
-
-# a mapping of "repo's host/url" to localpath where a repository must be cloned
-paths:
-  github.com/nalexn/clean-architecture-swiftui: ~/projects/nalexn/clean-architecture-swiftui
-  github.com/projectnessie/nessie: ~/projects/nessie
+paths:                       # repo id -> clone path
+  git.nimbus.example/nimbus/billing/billing: /Users/me/projects/billing
 ```
 
-##### Root (`mur.yaml`)
-```
-# Just version of mur.
-# When runs, mur checks what version the configuration was written with.
-# If source is written with newer version - asks to upgrade.
+`users/<email>/state.yaml` in a source has the same shape. It holds `active`,
+`scan_roots`, and the `paths` of that source's repos, with `~` paths.
+
+### `mur.yaml`
+
+```yaml
 version: 1
 ```
 
-## Exit codes
+mur refuses a source written with a newer version and asks you to upgrade.
 
-`0` ok · `1` error · `2` usage · `3` needs input (`needs_path`) · `4` not found or
-ambiguous (candidates on stderr).
+### Repo identity
+
+A repo is identified by its normalized url: `host/path`, with the host
+lowercased and the scheme, `user@`, port and a trailing `.git` stripped. So
+`git@github.com:bifshteks/mur.git` and `https://github.com/bifshteks/mur` are the
+same repo, `github.com/bifshteks/mur`. The path keeps its case. `resolve`
+matches an alias, a basename (`mur`), or any form of the url.
+
+---
+
+## Explanation
+
+### The problem mur solves
+
+In a company that uses many repos, every developer and every agent session
+keeps asking the same question:
+
+> Where is the repo we call *X*, and what is it for?
+
+People answer it from memory and shell history. Agents answer it by searching
+the disk or guessing paths, and they get it wrong. They pick
+`svc-analytics-common` when `iam/common` was meant, or edit a stale second
+clone. mur turns the answer into data: you describe your repos once, and mur
+**resolves** them. It never guesses.
+
+### Why workspaces map to teams
+
+Take a company, *Nimbus Cloud*, with hundreds of repos and dozens of teams. Each
+team owns a few repos and only reads some others:
+
+```
+security:  iam-access-manager (own), iam-role-manager (own), billing (integrate)
+billing:   billing (own), iam-access-manager (integrate), managed-postgres (integrate)
+core:      vm-virtualizer (own), iam-access-manager (integrate)
+```
+
+A **workspace** is that list for one team, with each repo's purpose and how it
+may be treated:
+
+> - *billing* — live, ours, shipped to prod. All billing logic lives here.
+> - *iam-access-manager* — read-only. We call its endpoints to check permissions.
+> - *openmeter* — upstream project, we don't change it. Read it for ideas.
+
+An agent that reads this (`mur workspace show`) knows where to make changes,
+what to only read, and what to leave alone. When a team splits, split the
+workspace (`billing-core`, `billing-payments`, …) so each subteam sees only its
+own repos.
+
+### Three kinds of data, kept apart
+
+| | Where | Shared? |
+| --- | --- | --- |
+| **Source**: workspace definitions | a git repo you commit and push | yes, with the team |
+| **Local state**: which sources, where clones are | `$MUR_HOME/state.yaml` | no |
+| **Saved state**: your paths for one source | `users/<email>/state.yaml` in that source | only if you push it |
+
+Shared definitions and personal paths never mix, and neither do different
+sources. A company source never learns about repos from your personal one.
+Because mur only writes files and leaves committing to you, it works with
+protected branches and with local-only sources.
+
+### Why mur is careful with your clones
+
+mur runs your own `git` binary, so SSH config, credential helpers and
+worktrees behave exactly as they do in your terminal. `sync` only *fetches*.
+It fast-forwards only on request, and only a clean tree on the default branch.
+It adopts an existing clone only when exactly one candidate matches. Without a
+terminal, it never waits for input: it finishes what it can and exits `3`. An
+agent therefore never blocks, and in-progress work is never moved or
+overwritten.
+
+The decisions behind this are recorded in [`docs/adr/`](docs/adr/).
+
+---
 
 ## Development
 
 ```bash
-go test ./...          # acceptance tests in internal/tests drive cli.Run with real git
+go test ./...            # acceptance tests in internal/tests drive cli.Run with real git
 golangci-lint run ./...
 ```
 
-Releases: push a `vX.Y.Z` tag; goreleaser builds darwin/linux × amd64/arm64 and
-commits `Casks/mur.rb` to `master` of this repo, which is also the Homebrew tap.
-No extra secret: the workflow's own `GITHUB_TOKEN` writes it. Decisions are in [`docs/adr/`](docs/adr/).
+`mur agent-guide` is generated from the command tree. Its examples in
+`internal/cli/guide/` are checked against real output by the tests.
+
+**Releases**: push a `vX.Y.Z` tag. goreleaser builds darwin/linux × amd64/arm64
+and commits `Casks/mur.rb` to `master` of this repo, which is also the Homebrew
+tap. The workflow's own `GITHUB_TOKEN` is enough; no extra secret is needed.
